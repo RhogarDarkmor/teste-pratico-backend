@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: wagering
+      POSTGRES_PASSWORD: wagering
+      POSTGRES_DB: wagering
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wagering -d wagering"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  localstack:
+    image: localstack/localstack:3.8
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: us-east-1
+    ports:
+      - "4566:4566"
+    configs:
+      # Roda quando o LocalStack fica pronto e cria as filas. Fica como config (e não bind mount)
+      # para funcionar em qualquer host, inclusive com caminhos com acento no Windows.
+      - source: sqs_init
+        target: /etc/localstack/init/ready.d/01-queues.sh
+        mode: 0755
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name wager-transactions.fifo"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+configs:
+  sqs_init:
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      # DLQ primeiro: a fila principal precisa do ARN dela na redrive policy.
+      awslocal sqs create-queue \
+        --queue-name wager-transactions-dlq.fifo \
+        --attributes FifoQueue=true,ContentBasedDeduplication=false
+
+      DLQ_ARN=$$(awslocal sqs get-queue-attributes \
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/wager-transactions-dlq.fifo \
+        --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)
+
+      # maxReceiveCount=5: após 5 recebimentos sem ack, a mensagem vai para a DLQ.
+      awslocal sqs create-queue \
+        --queue-name wager-transactions.fifo \
+        --attributes "{\"FifoQueue\":\"true\",\"ContentBasedDeduplication\":\"false\",\"VisibilityTimeout\":\"30\",\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"$${DLQ_ARN}\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}"
+
+      echo "SQS queues ready"
+
+volumes:
+  pgdata:
