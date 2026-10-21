@@ -11,6 +11,7 @@ export function buildOrmConfig(clientUrl = process.env.DATABASE_URL ?? DEFAULT_D
     discovery: { warnWhenNoEntities: false },
     extensions: [Migrator],
     migrations: {
+      snapshot: false,
       migrationsList: [
         {
           name: 'Migration20261021000001_initial_schema',
