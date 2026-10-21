@@ -1,3 +1,5 @@
+import { metrics } from '../../observability/metrics';
+
 const RETRYABLE = new Set(['23505', '40001', '40P01']);
 
 export function isRetryable(error: unknown): boolean {
@@ -14,6 +16,9 @@ export async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<
       if (attempt >= attempts || !isRetryable(error)) {
         throw error;
       }
+      const code = (error as { code: string }).code;
+      metrics.dbRetries.inc({ code });
+      if (code !== '23505') metrics.lockConflicts.inc({ code });
     }
   }
 }

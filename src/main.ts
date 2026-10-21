@@ -1,9 +1,12 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { JsonLogger } from './observability/logger';
+import { httpObservability } from './observability/http-observability';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { logger: new JsonLogger() });
+  app.use(httpObservability);
   // deixa o SIGTERM encerrar direito
   app.enableShutdownHooks();
   const port = Number(process.env.PORT ?? 3000);

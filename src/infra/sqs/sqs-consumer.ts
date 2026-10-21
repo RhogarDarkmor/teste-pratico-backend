@@ -8,6 +8,7 @@ import {
 } from '@aws-sdk/client-sqs';
 import { IdempotencyConflictError, InvalidMessageError, WalletNotFoundError } from '../../application/errors';
 import { DomainError } from '../../domain/errors/domain-error';
+import { metrics } from '../../observability/metrics';
 import { backoffDelayMs, type BackoffOptions } from '../outbox/backoff';
 
 export interface MessageProcessor {
@@ -23,9 +24,9 @@ export interface SqsConsumerOptions {
 }
 
 export interface ConsumerLogger {
-  log(message: string): void;
-  warn(message: string): void;
-  error(message: string): void;
+  log(message: string | object): void;
+  warn(message: string | object): void;
+  error(message: string | object): void;
 }
 
 export type Failure = 'permanent' | 'transient';
@@ -127,20 +128,36 @@ export class SqsConsumer {
     const kind = classifyFailure(error);
 
     if (kind === 'permanent' || receiveCount >= this.options.maxAttempts) {
-      this.logger.error(`Message ${message.MessageId} sent to DLQ (${kind}, receive ${receiveCount}): ${reason}`);
+      this.logger.error({
+        message: 'message sent to DLQ',
+        messageId: message.MessageId,
+        walletId: message.Attributes?.MessageGroupId,
+        failure: kind,
+        receiveCount,
+        reason,
+      });
       try {
         await this.sendToDlq(message, reason);
       } catch (dlqError) {
-        this.logger.error(`Could not send ${message.MessageId} to DLQ: ${(dlqError as Error).message}`);
+        this.logger.error({ message: 'could not send to DLQ', messageId: message.MessageId, reason: (dlqError as Error).message });
         return false;
       }
+      metrics.dlqMessages.inc({ kind });
+      metrics.sqsMessages.inc({ outcome: 'dlq' });
       return this.ack(message);
     }
 
     const delaySeconds = Math.ceil(backoffDelayMs(receiveCount, this.options.backoff) / 1000);
-    this.logger.warn(
-      `Message ${message.MessageId} failed (receive ${receiveCount}), retry in ${delaySeconds}s: ${reason}`,
-    );
+    metrics.sqsRetries.inc();
+    metrics.sqsMessages.inc({ outcome: 'retry' });
+    this.logger.warn({
+      message: 'message failed, will retry',
+      messageId: message.MessageId,
+      walletId: message.Attributes?.MessageGroupId,
+      receiveCount,
+      retryInSeconds: delaySeconds,
+      reason,
+    });
     await this.changeVisibility(message, delaySeconds);
     return false;
   }

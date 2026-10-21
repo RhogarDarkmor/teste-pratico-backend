@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from './infra/database/database.module';
 import { HealthController } from './health/health.controller';
+import { MetricsController } from './observability/metrics.controller';
 import { APP_FILTER } from '@nestjs/core';
 import { SQSClient } from '@aws-sdk/client-sqs';
 import { ApiExceptionFilter } from './http/api-exception.filter';
@@ -14,7 +15,7 @@ import { SqsConsumerService } from './infra/sqs/sqs-consumer.service';
 
 @Module({
   imports: [DatabaseModule, WageringModule],
-  controllers: [HealthController],
+  controllers: [HealthController, MetricsController],
   providers: [
     OutboxPublisherService,
     PendingReferenceWorkerService,

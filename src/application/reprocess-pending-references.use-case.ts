@@ -11,6 +11,8 @@ import { withRetry } from '../infra/database/retry';
 import { backoffDelayMs, type BackoffOptions } from '../infra/outbox/backoff';
 import { WageringRepository } from '../infra/persistence/wagering.repository';
 import { newId } from '../shared/ids';
+import { createLogger } from '../observability/logger';
+import { metrics } from '../observability/metrics';
 
 export interface ReprocessOptions {
   batchSize: number;
@@ -59,10 +61,15 @@ export class ReprocessPendingReferencesUseCase {
     return summary;
   }
 
-  reprocess(transactionId: string, walletId: string): Promise<ReprocessResult> {
-    return withRetry(() =>
+  async reprocess(transactionId: string, walletId: string): Promise<ReprocessResult> {
+    const result = await withRetry(() =>
       this.em.fork().transactional((tem) => this.run(new WageringRepository(tem), transactionId, walletId)),
     );
+    metrics.pendingReprocessed.inc({ result });
+    if (result !== 'skipped') {
+      createLogger('ReprocessPendingReferences').info('pending reference reprocessed', { transactionId, walletId, result });
+    }
+    return result;
   }
 
   private async run(repo: WageringRepository, transactionId: string, walletId: string): Promise<ReprocessResult> {

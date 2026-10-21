@@ -6,7 +6,6 @@ import {
   Headers,
   HttpException,
   HttpStatus,
-  Logger,
   Param,
   Post,
   Query,
@@ -16,13 +15,15 @@ import { OpenWalletUseCase } from '../application/open-wallet.use-case';
 import { QueryWalletsUseCase } from '../application/query-wallets.use-case';
 import { SubmitWagerTransactionUseCase, type SubmitWagerCommand } from '../application/submit-wager-transaction.use-case';
 import { WagerTransactionKind } from '../domain/wagering/wager-transaction';
+import { createLogger } from '../observability/logger';
+import { metrics } from '../observability/metrics';
+
+const reconciliationLogger = createLogger('Reconciliation');
 
 type JsonObject = Record<string, unknown>;
 
 @Controller()
 export class WageringController {
-  private readonly logger = new Logger(WageringController.name);
-
   constructor(
     private readonly openWallet: OpenWalletUseCase,
     private readonly submitTransaction: SubmitWagerTransactionUseCase,
@@ -96,11 +97,16 @@ export class WageringController {
   }
 
   @Post('wagering/transactions')
-  async submit(@Body() body: unknown, @Headers('idempotency-key') idempotencyKey?: string) {
+  async submit(
+    @Body() body: unknown,
+    @Headers('idempotency-key') idempotencyKey?: string,
+    @Headers('x-correlation-id') correlationId?: string,
+  ) {
     if (!idempotencyKey?.trim()) {
       throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'Idempotency-Key header is required' });
     }
     const command = wagerCommand(object(body, 'body'), idempotencyKey);
+    if (correlationId?.trim()) command.correlationId = correlationId.trim();
     const result = await this.submitTransaction.execute(command);
     const response = {
       transactionId: result.transactionId,
@@ -122,10 +128,14 @@ export class WageringController {
   async reconcile(@Param('walletId') walletId: string) {
     assertUuid(walletId, 'walletId');
     const result = await this.queries.reconcile(walletId);
+    metrics.reconciliations.inc();
     if (!result.consistent) {
-      this.logger.error(
-        `Wallet reconciliation mismatch for ${walletId}: stored=${result.storedBalance} calculated=${result.calculatedBalance}`,
-      );
+      metrics.reconciliationDivergences.inc();
+      reconciliationLogger.error('wallet reconciliation divergence', {
+        walletId,
+        difference: result.difference.toString(),
+        checkedEntries: result.checkedEntries,
+      });
     }
     return {
       walletId: result.walletId,

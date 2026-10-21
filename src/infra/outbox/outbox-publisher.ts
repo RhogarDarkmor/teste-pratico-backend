@@ -1,5 +1,6 @@
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { withRetry } from '../database/retry';
+import { metrics } from '../../observability/metrics';
 import { OutboxRepository } from '../persistence/outbox.repository';
 import { backoffDelayMs, DEFAULT_BACKOFF, type BackoffOptions } from './backoff';
 import type { MessagePublisher } from './sqs-message-publisher';
@@ -58,11 +59,13 @@ export class OutboxPublisher {
           try {
             await this.publisher.publish(message);
             await repo.markPublished(message.id);
+            metrics.outboxPublished.inc();
             result.published++;
           } catch (error) {
             const attempts = message.attempts + 1;
             const delay = backoffDelayMs(attempts, this.options.backoff);
             await repo.markFailed(message.id, attempts, delay);
+            metrics.outboxFailures.inc();
             blocked.add(message.aggregateId);
             result.failed++;
             this.logger.warn(

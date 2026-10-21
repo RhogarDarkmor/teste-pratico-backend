@@ -17,6 +17,8 @@ import {
 import { withRetry } from '../infra/database/retry';
 import { type StoredTransaction, WageringRepository } from '../infra/persistence/wagering.repository';
 import { newId } from '../shared/ids';
+import { createLogger } from '../observability/logger';
+import { metrics } from '../observability/metrics';
 import { IdempotencyConflictError, WalletNotFoundError } from './errors';
 
 export interface SubmitWagerCommand {
@@ -42,14 +44,49 @@ export interface SubmitWagerResult {
   idempotentReplay: boolean;
 }
 
+const logger = createLogger('SubmitWagerTransaction');
+
+// Chamado só depois do commit, para a métrica não contar o que acabou revertido.
+export function observeSubmitted(
+  origin: 'http' | 'sqs',
+  command: SubmitWagerCommand,
+  result: SubmitWagerResult,
+  startedAt: number,
+  messageId?: string,
+): void {
+  const seconds = (performance.now() - startedAt) / 1000;
+  metrics.processingDuration.observe(seconds, { origin });
+  if (result.idempotentReplay) {
+    metrics.duplicates.inc({ source: 'idempotency' });
+  } else {
+    metrics.transactions.inc({ status: result.status, kind: command.kind });
+  }
+  logger.info('wager transaction handled', {
+    origin,
+    correlationId: command.correlationId,
+    messageId,
+    transactionId: result.transactionId,
+    walletId: command.walletId,
+    providerId: command.providerId,
+    kind: command.kind,
+    status: result.status,
+    failureCode: result.failureCode,
+    replay: result.idempotentReplay,
+    durationMs: Math.round(seconds * 1000),
+  });
+}
+
 export class SubmitWagerTransactionUseCase {
   constructor(
     private readonly em: EntityManager,
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
-  execute(command: SubmitWagerCommand): Promise<SubmitWagerResult> {
-    return withRetry(() => this.em.transactional((tem) => this.run(new WageringRepository(tem), command)));
+  async execute(command: SubmitWagerCommand): Promise<SubmitWagerResult> {
+    const startedAt = performance.now();
+    const result = await withRetry(() => this.em.transactional((tem) => this.run(new WageringRepository(tem), command)));
+    observeSubmitted('http', command, result, startedAt);
+    return result;
   }
 
   // para quem já abriu a transação (o consumidor SQS grava a inbox na mesma transação)

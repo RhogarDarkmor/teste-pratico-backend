@@ -4,6 +4,9 @@ import { InboxMessage } from '../domain/events/inbox-message';
 import { withRetry } from '../infra/database/retry';
 import { InboxRepository } from '../infra/persistence/inbox.repository';
 import { InvalidMessageError } from './errors';
+import { createLogger } from '../observability/logger';
+import { metrics } from '../observability/metrics';
+import { observeSubmitted } from './submit-wager-transaction.use-case';
 import type { SubmitWagerResult, SubmitWagerTransactionUseCase } from './submit-wager-transaction.use-case';
 import { parseWagerMessage } from './wager-message';
 
@@ -22,11 +25,12 @@ export class ProcessWagerMessageUseCase {
 
   // Inbox, saldo, ledger e outbox ficam na mesma transação: ou tudo é confirmado, ou nada.
   // Quem chama só deve dar ack depois que esta promessa resolver.
-  execute(body: string): Promise<ProcessMessageOutcome> {
+  async execute(body: string): Promise<ProcessMessageOutcome> {
+    const startedAt = performance.now();
     const { messageId, command } = parseWagerMessage(body);
     const payloadHash = createHash('sha256').update(body).digest('hex');
 
-    return withRetry(() =>
+    const outcome = await withRetry(() =>
       this.em.transactional(async (tem): Promise<ProcessMessageOutcome> => {
         const inbox = new InboxRepository(tem);
         const received = InboxMessage.receive({
@@ -50,5 +54,20 @@ export class ProcessWagerMessageUseCase {
         return { kind: 'processed', result };
       }),
     );
+
+    if (outcome.kind === 'duplicate') {
+      metrics.duplicates.inc({ source: 'inbox' });
+      metrics.sqsMessages.inc({ outcome: 'duplicate' });
+      createLogger('ProcessWagerMessage').info('duplicate message ignored', {
+        messageId,
+        correlationId: command.correlationId,
+        walletId: command.walletId,
+        providerId: command.providerId,
+      });
+    } else {
+      metrics.sqsMessages.inc({ outcome: 'processed' });
+      observeSubmitted('sqs', command, outcome.result, startedAt, messageId);
+    }
+    return outcome;
   }
 }
