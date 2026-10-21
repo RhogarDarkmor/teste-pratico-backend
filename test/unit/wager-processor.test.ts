@@ -84,6 +84,13 @@ describe('applyWager', () => {
       expect(wallet.balance.toString()).toBe('100.00');
     });
 
+    test('player diferente do dono da wallet é rejeitado', () => {
+      const wallet = openWallet();
+      const tx = makeTx({ playerId: 'outro-player' });
+      expect(run(wallet, tx)).toEqual({ status: 'rejected', code: FailureCode.PlayerMismatch });
+      expect(wallet.balance.toString()).toBe('100.00');
+    });
+
     test('transação de outra wallet é erro de programação', () => {
       expect(() => run(openWallet(), makeTx({ walletId: 'outra' }))).toThrow();
     });
@@ -196,13 +203,22 @@ describe('applyWager', () => {
 
     test.each([
       ['provider', { providerId: 'provider-b' }],
-      ['player', { playerId: 'p2' }],
       ['rodada', { roundId: 'r2' }],
     ])('referência de outro %s é rejeitada', (_name, diff) => {
       const wallet = openWallet();
       const bet = processedBet(wallet);
       const refund = reversal(Kind.Refund, diff);
       expect(run(wallet, refund, { reference: bet })).toEqual({
+        status: 'rejected',
+        code: FailureCode.ReferenceMismatch,
+      });
+    });
+
+    test('referência de outro player é rejeitada', () => {
+      const wallet = openWallet();
+      const bet = makeTx({ id: 'bet', externalTransactionId: 'bet-ext', playerId: 'p2', money: brl('25.00') });
+      bet.markProcessed(undefined, now);
+      expect(run(wallet, reversal(Kind.Refund), { reference: bet })).toEqual({
         status: 'rejected',
         code: FailureCode.ReferenceMismatch,
       });

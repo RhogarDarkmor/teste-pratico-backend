@@ -19,7 +19,7 @@ const tables = async () =>
   ).map((r) => r.table_name as string);
 
 describe('migrations', () => {
-  test('up cria o schema e down desfaz tudo (reversível)', async () => {
+  test('up cria o schema e cada down desfaz uma migration até zerar (reversível)', async () => {
     expect(await tables()).toEqual([]);
 
     await db.migrator.up();
@@ -31,6 +31,7 @@ describe('migrations', () => {
       'wallets',
     ]);
 
+    await db.migrator.down();
     await db.migrator.down();
     expect(await tables()).toEqual([]);
     const fn = await db.sql(`select 1 from pg_proc where proname = 'forbid_ledger_change'`);

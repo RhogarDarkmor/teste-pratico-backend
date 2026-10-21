@@ -39,6 +39,9 @@ export function applyWager(tx: WagerTransaction, ctx: ApplyWagerContext): WagerO
   if (tx.money.currency !== wallet.currency) {
     return reject(tx, FailureCode.CurrencyMismatch);
   }
+  if (tx.playerId !== wallet.playerId) {
+    return reject(tx, FailureCode.PlayerMismatch);
+  }
 
   const reference = ctx.reference;
   if (tx.referenceExternalTransactionId !== undefined) {
