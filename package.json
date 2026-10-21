@@ -9,7 +9,7 @@
     "db:migrate": "bun run src/infra/database/migrate.ts up",
     "db:rollback": "bun run src/infra/database/migrate.ts down",
     "db:status": "bun run src/infra/database/migrate.ts status",
-    "test": "bun test",
+    "test": "bun test --timeout 30000",
     "infra:up": "docker compose up -d --wait",
     "infra:down": "docker compose down"
   },

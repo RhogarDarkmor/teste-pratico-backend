@@ -24,5 +24,6 @@ import { WageringController } from './wagering.controller';
       useFactory: (em: EntityManager) => new QueryWalletsUseCase(em),
     },
   ],
+  exports: [SubmitWagerTransactionUseCase],
 })
 export class WageringModule {}

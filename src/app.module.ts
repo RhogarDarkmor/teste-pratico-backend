@@ -6,12 +6,23 @@ import { SQSClient } from '@aws-sdk/client-sqs';
 import { ApiExceptionFilter } from './http/api-exception.filter';
 import { WageringModule } from './http/wagering.module';
 import { OutboxPublisherService } from './infra/outbox/outbox-publisher.service';
+import { EntityManager } from '@mikro-orm/postgresql';
+import { ProcessWagerMessageUseCase } from './application/process-wager-message.use-case';
+import { SubmitWagerTransactionUseCase } from './application/submit-wager-transaction.use-case';
+import { SqsConsumerService } from './infra/sqs/sqs-consumer.service';
 
 @Module({
   imports: [DatabaseModule, WageringModule],
   controllers: [HealthController],
   providers: [
     OutboxPublisherService,
+    {
+      provide: ProcessWagerMessageUseCase,
+      inject: [EntityManager, SubmitWagerTransactionUseCase],
+      useFactory: (em: EntityManager, submit: SubmitWagerTransactionUseCase) =>
+        new ProcessWagerMessageUseCase(em, submit),
+    },
+    SqsConsumerService,
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
     {
       provide: SQSClient,

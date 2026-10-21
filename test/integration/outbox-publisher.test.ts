@@ -92,7 +92,7 @@ describe('OutboxPublisher', () => {
         return new SqsMessagePublisher(sqs, queueUrl).publish(m);
       },
     };
-    const publisher = outbox(flaky);
+    const publisher = outbox(flaky, { backoff: { baseMs: 60_000, maxMs: 60_000 } });
 
     expect(await publisher.runOnce()).toEqual({ claimed: 1, published: 0, failed: 1 });
     const [afterFail] = await db.sql('select attempts, published_at from outbox_messages where id = ?', [id]);
@@ -102,8 +102,9 @@ describe('OutboxPublisher', () => {
     // ainda em espera: nada acontece
     expect((await publisher.runOnce()).claimed).toBe(0);
 
+    // o SQS volta e o prazo do backoff chega
     sqsUp = true;
-    await Bun.sleep(150);
+    await db.sql(`update outbox_messages set next_attempt_at = now() - interval '1 second' where id = ?`, [id]);
     expect(await publisher.runOnce()).toEqual({ claimed: 1, published: 1, failed: 0 });
     expect((await drainQueue(1)).map((b) => b.eventId)).toEqual([id]);
   });

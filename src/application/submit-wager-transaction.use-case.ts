@@ -52,6 +52,11 @@ export class SubmitWagerTransactionUseCase {
     return withRetry(() => this.em.transactional((tem) => this.run(new WageringRepository(tem), command)));
   }
 
+  // para quem já abriu a transação (o consumidor SQS grava a inbox na mesma transação)
+  executeWithin(tem: Pick<EntityManager, 'execute'>, command: SubmitWagerCommand): Promise<SubmitWagerResult> {
+    return this.run(new WageringRepository(tem), command);
+  }
+
   private async run(repo: WageringRepository, command: SubmitWagerCommand): Promise<SubmitWagerResult> {
     // o domínio muta a transação, então ela é remontada a cada tentativa
     const now = this.clock();
