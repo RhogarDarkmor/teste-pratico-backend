@@ -39,7 +39,6 @@ export class WalletLedgerEntry {
     return entry;
   }
 
-  /** Estado já persistido: não revalida. */
   static rehydrate(state: LedgerEntryState): WalletLedgerEntry {
     return WalletLedgerEntry.build(state);
   }

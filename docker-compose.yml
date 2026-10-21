@@ -23,8 +23,7 @@ services:
     ports:
       - "4566:4566"
     configs:
-      # Roda quando o LocalStack fica pronto e cria as filas. Fica como config (e não bind mount)
-      # para funcionar em qualquer host, inclusive com caminhos com acento no Windows.
+      # config em vez de bind mount, que quebra com acento no caminho do Windows
       - source: sqs_init
         target: /etc/localstack/init/ready.d/01-queues.sh
         mode: 0755
@@ -40,7 +39,7 @@ configs:
       #!/bin/bash
       set -euo pipefail
 
-      # DLQ primeiro: a fila principal precisa do ARN dela na redrive policy.
+      # a dlq tem que existir antes, a principal usa o arn dela
       awslocal sqs create-queue \
         --queue-name wager-transactions-dlq.fifo \
         --attributes FifoQueue=true,ContentBasedDeduplication=false
@@ -49,7 +48,7 @@ configs:
         --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/wager-transactions-dlq.fifo \
         --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)
 
-      # maxReceiveCount=5: após 5 recebimentos sem ack, a mensagem vai para a DLQ.
+      # vai pra dlq depois de 5 tentativas
       awslocal sqs create-queue \
         --queue-name wager-transactions.fifo \
         --attributes "{\"FifoQueue\":\"true\",\"ContentBasedDeduplication\":\"false\",\"VisibilityTimeout\":\"30\",\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"$${DLQ_ARN}\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}"

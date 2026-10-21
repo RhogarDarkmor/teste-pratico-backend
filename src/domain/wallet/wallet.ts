@@ -39,7 +39,6 @@ export class Wallet {
     return new Wallet(props.id, props.playerId, props.initialBalance.currency, props.initialBalance, 1, now, now);
   }
 
-  /** Reconstrução a partir da persistência — não revalida transições. */
   static rehydrate(state: WalletState): Wallet {
     return new Wallet(
       state.id,
@@ -77,8 +76,7 @@ export class Wallet {
     return this.apply(LedgerDirection.Credit, this._balance.add(props.amount), props);
   }
 
-  // O ledger só é criado depois que o saldo novo foi calculado e validado,
-  // então saldo e lançamento nunca ficam dessincronizados.
+  // saldo e ledger mudam juntos, só depois de tudo validado
   private apply(direction: LedgerDirection, next: Money, props: MovementProps): WalletLedgerEntry {
     const entry = WalletLedgerEntry.create({
       id: props.entryId,

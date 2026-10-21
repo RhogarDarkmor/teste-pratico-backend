@@ -1,7 +1,7 @@
 import DecimalJs from 'decimal.js';
 import { CurrencyMismatchError, InvalidMoneyError } from '../errors/money.errors';
 
-// Cópia isolada com precisão folgada, para não depender do default global (20 dígitos).
+// clone pra não depender da precisão global (20 dígitos)
 const Decimal = DecimalJs.clone({ precision: 40 });
 type Decimal = DecimalJs;
 
@@ -11,7 +11,6 @@ export interface MoneyProps {
 }
 
 const SCALE = 2;
-// Só dígitos, com no máximo 2 casas. Sem sinal, expoente, NaN ou Infinity.
 const INPUT_AMOUNT = /^\d+(\.\d{1,2})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
 
@@ -21,7 +20,6 @@ export class Money {
     public readonly currency: string,
   ) {}
 
-  /** Porta de entrada (API, fila): só aceita valores não negativos. */
   static from(props: MoneyProps): Money {
     const { amount, currency } = props;
     if (typeof amount !== 'string' || !INPUT_AMOUNT.test(amount)) {
@@ -31,7 +29,7 @@ export class Money {
     return new Money(new Decimal(amount), currency);
   }
 
-  /** Reidratação do banco: aceita negativos para não quebrar leituras de estado já persistido. */
+  // vindo do banco aceita negativo, a entrada externa (from) não
   static fromPersisted(props: MoneyProps): Money {
     Money.assertCurrency(props.currency);
     let value: Decimal;
