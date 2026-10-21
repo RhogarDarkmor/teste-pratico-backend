@@ -2,6 +2,7 @@ import { defineConfig } from '@mikro-orm/postgresql';
 import { Migrator } from '@mikro-orm/migrations';
 import { Migration20261021000001_initial_schema } from './migrations/Migration20261021000001_initial_schema';
 import { Migration20261021000002_observed_balance } from './migrations/Migration20261021000002_observed_balance';
+import { Migration20261021000003_pending_reference_retry } from './migrations/Migration20261021000003_pending_reference_retry';
 
 export const DEFAULT_DATABASE_URL = 'postgres://wagering:wagering@localhost:5432/wagering';
 
@@ -21,6 +22,10 @@ export function buildOrmConfig(clientUrl = process.env.DATABASE_URL ?? DEFAULT_D
         {
           name: 'Migration20261021000002_observed_balance',
           class: Migration20261021000002_observed_balance,
+        },
+        {
+          name: 'Migration20261021000003_pending_reference_retry',
+          class: Migration20261021000003_pending_reference_retry,
         },
       ],
     },

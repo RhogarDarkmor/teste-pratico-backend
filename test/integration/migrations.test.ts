@@ -33,6 +33,7 @@ describe('migrations', () => {
 
     await db.migrator.down();
     await db.migrator.down();
+    await db.migrator.down();
     expect(await tables()).toEqual([]);
     const fn = await db.sql(`select 1 from pg_proc where proname = 'forbid_ledger_change'`);
     expect(fn).toHaveLength(0);

@@ -6,6 +6,7 @@ import { SQSClient } from '@aws-sdk/client-sqs';
 import { ApiExceptionFilter } from './http/api-exception.filter';
 import { WageringModule } from './http/wagering.module';
 import { OutboxPublisherService } from './infra/outbox/outbox-publisher.service';
+import { PendingReferenceWorkerService } from './infra/worker/pending-reference-worker.service';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { ProcessWagerMessageUseCase } from './application/process-wager-message.use-case';
 import { SubmitWagerTransactionUseCase } from './application/submit-wager-transaction.use-case';
@@ -16,6 +17,7 @@ import { SqsConsumerService } from './infra/sqs/sqs-consumer.service';
   controllers: [HealthController],
   providers: [
     OutboxPublisherService,
+    PendingReferenceWorkerService,
     {
       provide: ProcessWagerMessageUseCase,
       inject: [EntityManager, SubmitWagerTransactionUseCase],

@@ -236,6 +236,56 @@ export class WageringRepository {
     );
   }
 
+  // só lê (sem lock): quem decide é o lock por transação, feito depois do lock da carteira
+  async findDuePendingReferences(limit: number): Promise<{ id: string; walletId: string }[]> {
+    const rows = await this.em.execute(
+      `select id, wallet_id from wager_transactions
+        where status = 'PENDING_REFERENCE' and coalesce(next_reprocess_at, created_at) <= now()
+        order by coalesce(next_reprocess_at, created_at)
+        limit ?`,
+      [limit],
+    );
+    return rows.map((row: Record<string, any>) => ({ id: row.id, walletId: row.wallet_id }));
+  }
+
+  async lockPendingTransaction(
+    transactionId: string,
+  ): Promise<{ transaction: WagerTransaction; attempts: number } | undefined> {
+    const rows = await this.em.execute(
+      `select ${TX_COLUMNS}, reprocess_attempts from wager_transactions
+        where id = ? and status = 'PENDING_REFERENCE' for update skip locked`,
+      [transactionId],
+    );
+    const row = rows[0];
+    return row ? { transaction: this.toStored(row).transaction, attempts: row.reprocess_attempts } : undefined;
+  }
+
+  async updateTransactionOutcome(tx: WagerTransaction, observedBalance: Money): Promise<void> {
+    await this.em.execute(
+      `update wager_transactions
+          set status = ?, failure_code = ?, reference_transaction_id = ?, processed_at = ?,
+              observed_balance = ?, next_reprocess_at = null
+        where id = ?`,
+      [
+        tx.status,
+        tx.failureCode ?? null,
+        tx.referenceTransactionId ?? null,
+        tx.processedAt ?? null,
+        observedBalance.toString(),
+        tx.id,
+      ],
+    );
+  }
+
+  async scheduleReprocess(transactionId: string, attempts: number, delayMs: number): Promise<void> {
+    await this.em.execute(
+      `update wager_transactions
+          set reprocess_attempts = ?, next_reprocess_at = now() + (? * interval '1 millisecond')
+        where id = ?`,
+      [attempts, delayMs, transactionId],
+    );
+  }
+
   async insertOutbox(event: IntegrationEvent<unknown>): Promise<void> {
     await this.em.execute(
       `insert into outbox_messages (id, aggregate_id, event_type, payload, occurred_at)
