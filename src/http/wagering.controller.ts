@@ -169,11 +169,14 @@ function wagerCommand(body: JsonObject, idempotencyKey: string): SubmitWagerComm
   if (reference !== undefined && (typeof reference !== 'string' || reference.trim() === '')) {
     throw new BadRequestException('referenceExternalTransactionId must be a non-empty string');
   }
+  const walletId = string(body.walletId, 'walletId');
+  assertUuid(walletId, 'walletId');
+
   return {
     providerId: string(body.providerId, 'providerId'),
     externalTransactionId: string(body.externalTransactionId, 'externalTransactionId'),
     idempotencyKey,
-    walletId: string(body.walletId, 'walletId'),
+    walletId,
     playerId: string(body.playerId, 'playerId'),
     roundId: string(body.roundId, 'roundId'),
     gameId: string(body.gameId, 'gameId'),

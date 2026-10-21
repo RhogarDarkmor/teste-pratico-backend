@@ -109,6 +109,16 @@ describe('HTTP API', () => {
     expect(invalid.status).toBe(400);
   });
 
+  test('recusa walletId que não é UUID com 400, sem estourar 500', async () => {
+    const wallet = await newWallet();
+    const response = await post(
+      '/wagering/transactions',
+      wager(wallet, { walletId: 'not-a-uuid' }),
+      { 'Idempotency-Key': 'bad-wallet-id' },
+    );
+    expect(response.status).toBe(400);
+  });
+
   test('mapeia duplicidade e parâmetros de consulta inválidos', async () => {
     const playerId = `duplicate-player-${++seq}`;
     const body = { playerId, initialBalance: { amount: '0.00', currency: 'BRL' } };
