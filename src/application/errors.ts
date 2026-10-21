@@ -11,3 +11,11 @@ export class WalletAlreadyExistsError extends DomainError {
 export class IdempotencyConflictError extends DomainError {
   readonly code = 'IDEMPOTENCY_CONFLICT';
 }
+
+export class WagerTransactionNotFoundError extends DomainError {
+  readonly code = 'TRANSACTION_NOT_FOUND';
+}
+
+export class InvalidQueryError extends DomainError {
+  readonly code = 'INVALID_QUERY';
+}

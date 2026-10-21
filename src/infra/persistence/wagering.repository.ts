@@ -12,6 +12,7 @@ import { Wallet } from '../../domain/wallet/wallet';
 
 // o driver devolve timestamptz como texto, então normalizo para ISO na própria consulta
 const ts = (column: string) => `to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+const cursorTs = (column: string) => `to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 const TX_COLUMNS = `
   id, provider_id, external_transaction_id, idempotency_key, payload_hash, wallet_id, player_id, round_id, game_id,
@@ -24,8 +25,24 @@ export interface StoredTransaction {
   observedBalance: Money | undefined;
 }
 
+export interface LedgerPage {
+  entries: WalletLedgerEntry[];
+  hasMore: boolean;
+  nextCursorPosition?: { createdAt: string; id: string };
+}
+
 export class WageringRepository {
   constructor(private readonly em: Pick<EntityManager, 'execute'>) {}
+
+  async findWallet(walletId: string): Promise<Wallet | undefined> {
+    const rows = await this.em.execute(
+      `select id, player_id, currency, balance::text as balance, version,
+              ${ts('created_at')} as created_at, ${ts('updated_at')} as updated_at
+         from wallets where id = ?`,
+      [walletId],
+    );
+    return rows[0] ? this.toWallet(rows[0]) : undefined;
+  }
 
   async lockWallet(walletId: string): Promise<Wallet | undefined> {
     const rows = await this.em.execute(
@@ -83,6 +100,81 @@ export class WageringRepository {
       [providerId, externalTransactionId],
     );
     return rows[0] ? this.toStored(rows[0]).transaction : undefined;
+  }
+
+  async findTransaction(transactionId: string): Promise<WagerTransaction | undefined> {
+    const rows = await this.em.execute(`select ${TX_COLUMNS} from wager_transactions where id = ?`, [transactionId]);
+    return rows[0] ? this.toStored(rows[0]).transaction : undefined;
+  }
+
+  async listLedger(
+    walletId: string,
+    cursor: { createdAt: string; id: string } | undefined,
+    limit: number,
+  ): Promise<LedgerPage> {
+    const params: unknown[] = [walletId];
+    let cursorSql = '';
+    if (cursor) {
+      cursorSql = 'and (created_at, id) > (?::timestamptz, ?::uuid)';
+      params.push(cursor.createdAt, cursor.id);
+    }
+    params.push(limit + 1);
+
+    const rows = await this.em.execute(
+      `select id, wallet_id, transaction_id, direction, amount::text as amount, currency,
+              balance_before::text as balance_before, balance_after::text as balance_after,
+              ${ts('created_at')} as created_at, ${cursorTs('created_at')} as cursor_created_at
+         from wallet_ledger_entries
+        where wallet_id = ? ${cursorSql}
+        order by created_at, id
+        limit ?`,
+      params,
+    );
+    const hasMore = rows.length > limit;
+    const lastRow = hasMore ? rows[limit - 1] : undefined;
+    return {
+      entries: rows.slice(0, limit).map((row: Record<string, any>) => {
+        const currency: string = row.currency;
+        return WalletLedgerEntry.rehydrate({
+          id: row.id,
+          walletId: row.wallet_id,
+          transactionId: row.transaction_id,
+          direction: row.direction as LedgerDirection,
+          money: Money.fromPersisted({ amount: row.amount, currency }),
+          balanceBefore: Money.fromPersisted({ amount: row.balance_before, currency }),
+          balanceAfter: Money.fromPersisted({ amount: row.balance_after, currency }),
+          createdAt: new Date(row.created_at),
+        });
+      }),
+      hasMore,
+      ...(lastRow && {
+        nextCursorPosition: { createdAt: lastRow.cursor_created_at, id: lastRow.id },
+      }),
+    };
+  }
+
+  async reconcileWallet(
+    walletId: string,
+  ): Promise<{ storedBalance: Money; calculatedBalance: Money; checkedEntries: number } | undefined> {
+    const wallet = await this.findWallet(walletId);
+    if (!wallet) {
+      return undefined;
+    }
+    const rows = await this.em.execute(
+      `select coalesce(sum(case direction when 'CREDIT' then amount else -amount end), 0)::text as calculated,
+              count(*)::int as checked_entries
+         from wallet_ledger_entries where wallet_id = ?`,
+      [walletId],
+    );
+    const aggregate = rows[0];
+    if (!aggregate) {
+      throw new Error(`Could not reconcile wallet ${walletId}`);
+    }
+    return {
+      storedBalance: wallet.balance,
+      calculatedBalance: Money.fromPersisted({ amount: aggregate.calculated, currency: wallet.currency }),
+      checkedEntries: aggregate.checked_entries,
+    };
   }
 
   async hasProcessedReversal(referenceTransactionId: string): Promise<boolean> {
