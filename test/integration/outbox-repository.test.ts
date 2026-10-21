@@ -17,13 +17,16 @@ beforeEach(async () => {
   await db.sql('delete from outbox_messages');
 });
 
-async function seed(opts: { occurredAt?: string; nextAttemptAt?: string; published?: boolean } = {}) {
+async function seed(
+  opts: { occurredAt?: string; nextAttemptAt?: string; published?: boolean; aggregateId?: string } = {},
+) {
   const id = randomUUID();
   await db.sql(
     `insert into outbox_messages (id, aggregate_id, event_type, payload, occurred_at, next_attempt_at, published_at)
-     values (?, 'w1', 'WalletBalanceChanged', '{"x":1}'::jsonb, ?, ?, ?)`,
+     values (?, ?, 'WalletBalanceChanged', '{"x":1}'::jsonb, ?, ?, ?)`,
     [
       id,
+      opts.aggregateId ?? randomUUID(),
       opts.occurredAt ?? new Date(Date.now() - 60_000).toISOString(),
       opts.nextAttemptAt ?? null,
       opts.published ? new Date().toISOString() : null,
@@ -94,5 +97,35 @@ describe('OutboxRepository.claimPending', () => {
     const id = await seed();
     await claim(1);
     expect((await claim(1)).map((m) => m.id)).toEqual([id]);
+  });
+
+  test('marca como publicada e não devolve mais', async () => {
+    const id = await seed();
+    await db.orm.em.fork().transactional((tem) => new OutboxRepository(tem as any).markPublished(id));
+    expect(await claim(10)).toHaveLength(0);
+    const [row] = await db.sql('select published_at from outbox_messages where id = ?', [id]);
+    expect(row.published_at).not.toBeNull();
+  });
+
+  test('falha soma a tentativa e adia a próxima', async () => {
+    const id = await seed();
+    await db.orm.em.fork().transactional((tem) => new OutboxRepository(tem as any).markFailed(id, 3, 60_000));
+    expect(await claim(10)).toHaveLength(0);
+    const [row] = await db.sql('select attempts, next_attempt_at > now() as waiting from outbox_messages where id = ?', [id]);
+    expect(row.attempts).toBe(3);
+    expect(row.waiting).toBe(true);
+  });
+
+  test('não libera mensagem nova de uma carteira cuja anterior está esperando backoff', async () => {
+    const aggregateId = randomUUID();
+    await seed({
+      aggregateId,
+      occurredAt: new Date(Date.now() - 50_000).toISOString(),
+      nextAttemptAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    await seed({ aggregateId, occurredAt: new Date(Date.now() - 40_000).toISOString() });
+    const other = await seed();
+
+    expect((await claim(10)).map((m) => m.id)).toEqual([other]);
   });
 });

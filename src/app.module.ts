@@ -5,11 +5,13 @@ import { APP_FILTER } from '@nestjs/core';
 import { SQSClient } from '@aws-sdk/client-sqs';
 import { ApiExceptionFilter } from './http/api-exception.filter';
 import { WageringModule } from './http/wagering.module';
+import { OutboxPublisherService } from './infra/outbox/outbox-publisher.service';
 
 @Module({
   imports: [DatabaseModule, WageringModule],
   controllers: [HealthController],
   providers: [
+    OutboxPublisherService,
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
     {
       provide: SQSClient,
