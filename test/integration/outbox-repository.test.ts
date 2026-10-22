@@ -101,7 +101,9 @@ describe('OutboxRepository.claimPending', () => {
 
   test('marca como publicada e não devolve mais', async () => {
     const id = await seed();
-    await db.orm.em.fork().transactional((tem) => new OutboxRepository(tem as any).markPublished(id));
+    const [message] = await claim(1);
+    message!.markPublished(new Date());
+    await db.orm.em.fork().transactional((tem) => new OutboxRepository(tem as any).markPublished(message!));
     expect(await claim(10)).toHaveLength(0);
     const [row] = await db.sql('select published_at from outbox_messages where id = ?', [id]);
     expect(row.published_at).not.toBeNull();
@@ -109,7 +111,10 @@ describe('OutboxRepository.claimPending', () => {
 
   test('falha soma a tentativa e adia a próxima', async () => {
     const id = await seed();
-    await db.orm.em.fork().transactional((tem) => new OutboxRepository(tem as any).markFailed(id, 3, 60_000));
+    await db.sql('update outbox_messages set attempts = 2 where id = ?', [id]);
+    const [message] = await claim(1);
+    message!.scheduleRetry(new Date(), { baseMs: 60_000, maxMs: 60_000 });
+    await db.orm.em.fork().transactional((tem) => new OutboxRepository(tem as any).markFailed(message!));
     expect(await claim(10)).toHaveLength(0);
     const [row] = await db.sql('select attempts, next_attempt_at > now() as waiting from outbox_messages where id = ?', [id]);
     expect(row.attempts).toBe(3);
@@ -159,7 +164,9 @@ describe('OutboxRepository.claimPending', () => {
     expect(second).toHaveLength(0);
     expect(second.map((message) => message.id)).not.toContain(newer);
     expect((await claim(10)).map((message) => message.id)).toEqual([older]);
-    await db.orm.em.fork().transactional((tem) => new OutboxRepository(tem as any).markPublished(older));
+    const [oldMessage] = await claim(1);
+    oldMessage!.markPublished(new Date());
+    await db.orm.em.fork().transactional((tem) => new OutboxRepository(tem as any).markPublished(oldMessage!));
     expect((await claim(10)).map((message) => message.id)).toEqual([newer]);
   });
 });

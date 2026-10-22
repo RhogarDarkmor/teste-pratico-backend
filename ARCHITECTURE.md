@@ -16,9 +16,13 @@ SQS  ──┘                              │
 
 As regras ficam em `src/domain` (Money, Wallet, WagerTransaction), sem banco nem framework. `application` tem os casos de uso e `infra` o resto.
 
+## ORM e persistência
+
+Usei MikroORM para configurar o PostgreSQL, controlar transações e rodar migrations. Escolhi SQL parametrizado nos repositórios porque preciso deixar explícitos os `FOR UPDATE`, `SKIP LOCKED`, constraints e consultas de ledger. Assim não uso o Unit of Work, o Identity Map nem o `LockMode` do ORM; em troca, as queries críticas e seus locks ficam visíveis e sob controle.
+
 ## Dinheiro
 
-Nada de `number`. Money usa decimal.js com 2 casas, no banco é `numeric(20,2)` e na API vai como string.
+Nada de `number`. Money usa decimal.js com 2 casas e na API vai como string. No Postgres o valor fica em `numeric(20,2)` e a moeda em uma coluna separada. As consultas leem o decimal com `::text` e reidratam o objeto com `Money.fromPersisted`; valores que chegam pela API passam por `Money.from`.
 
 ## Concorrência
 
@@ -27,6 +31,15 @@ Lock pessimista por carteira: a transação começa com `SELECT ... FOR UPDATE` 
 ## Idempotência
 
 Tudo no banco, com unique no id do provedor, na `idempotency_key` e no ledger. Guardo o hash do payload: mesmo hash devolve a resposta original, diferente da 409. Se duas iguais chegam juntas uma toma `23505`, tenta de novo e acha a linha da outra.
+
+## Transições da transação
+
+```
+PENDING           -> PROCESSED | REJECTED | FAILED | PENDING_REFERENCE
+PENDING_REFERENCE -> PENDING_REFERENCE | PROCESSED | REJECTED | FAILED
+```
+
+`PROCESSED`, `REJECTED` e `FAILED` são terminais: depois deles não há novas transições.
 
 ## Reversões
 
@@ -38,7 +51,7 @@ Por que 10 min: fora de ordem normalmente é questão de segundos (fila, retry d
 
 Na entrada grava no inbox, processa e marca, tudo junto. O ack só sai depois do commit, então se cair a mensagem volta e o inbox segura. Erro permanente vai direto pra DLQ, transitório depois de 5 tentativas.
 
-Na saída o publisher lê o outbox com `SKIP LOCKED` e usa o id do evento como dedup no SQS, porque pode publicar duas vezes. Um sequence gerado pelo Postgres ordena os eventos; eventos anteriores da mesma carteira bloqueiam os seguintes até serem publicados, inclusive durante retries.
+Na saída o evento vira `OutboxMessage` com `enqueue`. A mensagem encapsula tentativas, backoff e publicação; o publisher chama `scheduleRetry` ou `markPublished`, e o repositório persiste o novo estado. O publisher lê o outbox com `SKIP LOCKED` e usa o id do evento como dedup no SQS, porque pode publicar duas vezes. Um sequence gerado pelo Postgres ordena os eventos; eventos anteriores da mesma carteira bloqueiam os seguintes até serem publicados, inclusive durante retries.
 
 ## Observabilidade
 
@@ -50,7 +63,6 @@ Não fiz, não vale ponto e preferi focar no financeiro. O `ProviderAuthGuard` e
 
 ## Limitações
 
-- SQL na mão em vez de entidade, pra ter controle dos locks.
 - Metricas em memoria por instância.
 - Conciliação só sob demanda.
 - Eventos de carteiras diferentes não têm uma ordem global garantida.

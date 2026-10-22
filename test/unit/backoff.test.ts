@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { backoffDelayMs } from '../../src/infra/outbox/backoff';
+import { backoffDelayMs } from '../../src/domain/events/backoff';
 
 const opts = { baseMs: 1_000, maxMs: 30_000 };
 

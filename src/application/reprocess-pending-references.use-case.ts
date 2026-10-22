@@ -8,7 +8,7 @@ import {
 import { FailureCode } from '../domain/wagering/failure-code';
 import { applyWager } from '../domain/wagering/wager-processor';
 import { withRetry } from '../infra/database/retry';
-import { backoffDelayMs, type BackoffOptions } from '../infra/outbox/backoff';
+import { backoffDelayMs, type BackoffOptions } from '../domain/events/backoff';
 import { WageringRepository } from '../infra/persistence/wagering.repository';
 import { newId } from '../shared/ids';
 import { createLogger } from '../observability/logger';

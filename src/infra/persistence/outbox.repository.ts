@@ -30,16 +30,22 @@ export class OutboxRepository {
     return rows.map((row) => this.toMessage(row));
   }
 
-  async markPublished(id: string): Promise<void> {
-    await this.em.execute(`update outbox_messages set published_at = now() where id = ?`, [id]);
+  async markPublished(message: OutboxMessage): Promise<void> {
+    await this.em.execute(
+      `update outbox_messages set published_at = ?, next_attempt_at = null where id = ?`,
+      [message.publishedAt, message.id],
+    );
   }
 
-  async markFailed(id: string, attempts: number, retryInMs: number): Promise<void> {
+  async markFailed(message: OutboxMessage): Promise<void> {
+    if (!message.nextAttemptAt) {
+      throw new Error(`Outbox message ${message.id} has no scheduled retry`);
+    }
     await this.em.execute(
       `update outbox_messages
-          set attempts = ?, next_attempt_at = now() + (? * interval '1 millisecond')
+          set attempts = ?, next_attempt_at = ?
         where id = ?`,
-      [attempts, retryInMs, id],
+      [message.attempts, message.nextAttemptAt, message.id],
     );
   }
 

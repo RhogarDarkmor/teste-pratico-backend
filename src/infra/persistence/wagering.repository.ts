@@ -1,5 +1,6 @@
 import type { EntityManager } from '@mikro-orm/postgresql';
 import type { IntegrationEvent } from '../../domain/events/integration-event';
+import { OutboxMessage } from '../../domain/events/outbox-message';
 import { LedgerDirection, WalletLedgerEntry } from '../../domain/ledger/wallet-ledger-entry';
 import { Money } from '../../domain/money/money';
 import type { FailureCode } from '../../domain/wagering/failure-code';
@@ -285,10 +286,11 @@ export class WageringRepository {
   }
 
   async insertOutbox(event: IntegrationEvent<unknown>): Promise<void> {
+    const message = OutboxMessage.enqueue(event);
     await this.em.execute(
       `insert into outbox_messages (id, aggregate_id, event_type, payload, occurred_at)
        values (?, ?, ?, ?::jsonb, ?)`,
-      [event.eventId, event.aggregateId, event.eventType, JSON.stringify(event.toJSON()), event.occurredAt],
+      [message.id, message.aggregateId, message.eventType, JSON.stringify(message.payload), message.occurredAt],
     );
   }
 

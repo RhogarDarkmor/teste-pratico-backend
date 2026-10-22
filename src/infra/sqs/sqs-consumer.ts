@@ -9,7 +9,7 @@ import {
 import { IdempotencyConflictError, InvalidMessageError, WalletNotFoundError } from '../../application/errors';
 import { DomainError } from '../../domain/errors/domain-error';
 import { metrics } from '../../observability/metrics';
-import { backoffDelayMs, type BackoffOptions } from '../outbox/backoff';
+import { backoffDelayMs, type BackoffOptions } from '../../domain/events/backoff';
 
 export interface MessageProcessor {
   execute(body: string): Promise<unknown>;
