@@ -51,29 +51,27 @@ export class OutboxPublisher {
         const repo = new OutboxRepository(tem);
         const batch = await repo.claimPending(this.options.batchSize);
         const result: PublishRunResult = { claimed: batch.length, published: 0, failed: 0 };
-        // se uma mensagem falha, as seguintes da mesma carteira esperam para não furar a ordem
-        const blocked = new Set<string>();
 
-        for (const message of batch) {
-          if (blocked.has(message.aggregateId)) continue;
-          try {
-            await this.publisher.publish(message);
-          } catch (error) {
-            message.scheduleRetry(new Date(), this.options.backoff);
-            await repo.markFailed(message);
-            metrics.outboxFailures.inc();
-            blocked.add(message.aggregateId);
-            result.failed++;
-            this.logger.warn(
-              `Outbox message ${message.id} failed (attempt ${message.attempts}), retry at ${message.nextAttemptAt?.toISOString()}: ${(error as Error).message}`,
-            );
-            continue;
-          }
-          message.markPublished(new Date());
-          await repo.markPublished(message);
-          metrics.outboxPublished.inc();
-          result.published++;
-        }
+        await Promise.all(
+          batch.map(async (message) => {
+            try {
+              await this.publisher.publish(message);
+            } catch (error) {
+              message.scheduleRetry(new Date(), this.options.backoff);
+              await repo.markFailed(message);
+              metrics.outboxFailures.inc();
+              result.failed++;
+              this.logger.warn(
+                `Outbox message ${message.id} failed (attempt ${message.attempts}), retry at ${message.nextAttemptAt?.toISOString()}: ${(error as Error).message}`,
+              );
+              return;
+            }
+            message.markPublished(new Date());
+            await repo.markPublished(message);
+            metrics.outboxPublished.inc();
+            result.published++;
+          }),
+        );
         return result;
       }),
     );

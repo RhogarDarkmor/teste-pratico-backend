@@ -150,6 +150,24 @@ describe('OutboxPublisher', () => {
     expect(new Set(sent)).toEqual(ids);
   });
 
+  test('publica em paralelo eventos de carteiras diferentes', async () => {
+    for (let i = 0; i < 5; i++) await seed(randomUUID(), 1_000);
+
+    let active = 0;
+    let maxActive = 0;
+    const publisher = outbox({
+      publish: async () => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        await Bun.sleep(20);
+        active--;
+      },
+    });
+
+    expect(await publisher.runOnce()).toEqual({ claimed: 5, published: 5, failed: 0 });
+    expect(maxActive).toBeGreaterThan(1);
+  });
+
   test('se o processo cai antes do commit, outro publicador refaz o envio sem duplicar na fila', async () => {
     const id = await seed(randomUUID(), 1_000);
     const real = new SqsMessagePublisher(sqs, queueUrl);

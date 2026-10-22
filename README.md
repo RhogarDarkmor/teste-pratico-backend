@@ -32,6 +32,7 @@ As variáveis de ambiente ficam em `.env.example`. O Bun lê o `.env` da raiz so
 | `bun run start` | sobe a API |
 | `bun run start:dev` | sobe a API recarregando ao salvar |
 | `bun run test` | roda todos os testes |
+| `bun run test:load` | executa o teste de carga local e imprime as métricas |
 | `bun run typecheck` | confere os tipos |
 | `bun run db:migrate` | aplica as migrações |
 | `bun run db:rollback` | desfaz a última migração |
@@ -47,6 +48,8 @@ bun run test
 ```
 
 O mais completo é `test/integration/multi-instance.test.ts`: sobe 5 instâncias reais da API, mistura HTTP e SQS, envia tudo duplicado, mata uma instância no meio e no fim confere saldo, ledger, DLQ, outbox e conciliação. Ele leva uns 2 minutos.
+
+O teste de carga usa PostgreSQL e LocalStack do Docker, inicia 3 instâncias reais da API e envia 300 apostas HTTP concorrentes para a mesma carteira. Ao final, confere saldo e ledger, e espera o outbox esvaziar. Rode com `bun run infra:up` antes; a metodologia e os resultados da última execução ficam em [docs/LOAD_TEST.md](docs/LOAD_TEST.md). Não há meta fixa de throughput: os números servem para descrever a execução no ambiente registrado.
 
 ## Configuração
 

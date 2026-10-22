@@ -51,6 +51,8 @@ Por que 10 min: fora de ordem normalmente é questão de segundos (fila, retry d
 
 Na entrada grava no inbox, processa e marca, tudo junto. O ack só sai depois do commit, então se cair a mensagem volta e o inbox segura. Erro permanente vai direto pra DLQ, transitório depois de 5 tentativas.
 
+No fluxo de entrada, uma falha permanente encaminha a mensagem para a DLQ; o consumidor não grava a transação como `FAILED`. A falha pode ocorrer antes de haver uma transação válida para atualizar ou quando não é seguro contar com o banco. Por isso, `FAILED` está definido no domínio, mas fica reservado e não é produzido atualmente pelo fluxo SQS.
+
 Na saída o evento vira `OutboxMessage` com `enqueue`. A mensagem encapsula tentativas, backoff e publicação; o publisher chama `scheduleRetry` ou `markPublished`, e o repositório persiste o novo estado. O publisher lê o outbox com `SKIP LOCKED` e usa o id do evento como dedup no SQS, porque pode publicar duas vezes. Um sequence gerado pelo Postgres ordena os eventos; eventos anteriores da mesma carteira bloqueiam os seguintes até serem publicados, inclusive durante retries.
 
 ## Observabilidade
@@ -66,8 +68,8 @@ Não fiz, não vale ponto e preferi focar no financeiro. O `ProviderAuthGuard` e
 - Metricas em memoria por instância.
 - Conciliação só sob demanda.
 - Eventos de carteiras diferentes não têm uma ordem global garantida.
-- Não fiz teste de carga, só o de 5 instâncias.
+- O teste de carga local é um cenário reproduzível, não uma medição de capacidade de produção; os resultados dependem da máquina e do Docker.
 
 ## Como rodar
 
-`bun run infra:up`, `bun run db:migrate` e `bun run test`. O teste mais completo é o `test/integration/multi-instance.test.ts`.
+`bun run infra:up`, `bun run db:migrate` e `bun run test`. O teste mais completo de concorrência é `test/integration/multi-instance.test.ts`; para a medição de carga, rode `bun run test:load` e consulte `docs/LOAD_TEST.md`.
