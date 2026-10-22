@@ -68,6 +68,7 @@ Não fiz, não vale ponto e preferi focar no financeiro. O `ProviderAuthGuard` e
 - Metricas em memoria por instância.
 - Conciliação só sob demanda.
 - Eventos de carteiras diferentes não têm uma ordem global garantida.
+- Os horários do ledger e do próximo retry do outbox vêm do relógio da instância. O lock da carteira garante a ordem real de gravação, mas com relógios defasados entre instâncias a listagem do ledger (ordenada por `created_at`) pode mostrar um lançamento fora de sequência e um retry pode sair alguns segundos antes ou depois. Saldo, conciliação e ordem dos eventos não são afetados. A correção seria uma sequência do banco no ledger, como já é feito no outbox.
 - O teste de carga local é um cenário reproduzível, não uma medição de capacidade de produção; os resultados dependem da máquina e do Docker.
 
 ## Como rodar

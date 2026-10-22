@@ -28,7 +28,9 @@ Os valores devem caber em `numeric(20,2)`: no máximo
 
 - `201`: carteira ou transação criada/processada.
 - `202`: transação aceita, aguardando uma referência.
-- `400`: corpo, cursor, limite ou chave de idempotência inválidos.
+- `400`: corpo, cursor, limite ou chave de idempotência inválidos. O corpo
+  sempre traz `code` (`INVALID_PAYLOAD`, `IDEMPOTENCY_KEY_REQUIRED` ou o código
+  do erro de domínio).
 - `404`: carteira ou transação inexistente.
 - `409`: carteira duplicada ou conflito de idempotência.
 - `422`: transação rejeitada por uma regra de negócio; o corpo inclui

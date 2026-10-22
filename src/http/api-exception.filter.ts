@@ -35,7 +35,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<HttpResponse>();
 
     if (exception instanceof HttpException) {
-      response.status(exception.getStatus()).json(exception.getResponse());
+      const status = exception.getStatus();
+      const body = exception.getResponse();
+      response.status(status).json(status === HttpStatus.BAD_REQUEST ? badRequestBody(body) : body);
       return;
     }
 
@@ -72,6 +74,15 @@ export class ApiExceptionFilter implements ExceptionFilter {
       message: 'Internal server error',
     });
   }
+}
+
+// Todo 400 sai com code, inclusive os gerados pelo Nest (ex.: JSON malformado).
+function badRequestBody(body: string | object): { statusCode: number; code: string; message: unknown } {
+  if (typeof body === 'object' && 'code' in body && typeof body.code === 'string') {
+    return { statusCode: 400, code: body.code, message: 'message' in body ? body.message : undefined };
+  }
+  const message = typeof body === 'string' ? body : 'message' in body ? body.message : 'Invalid request';
+  return { statusCode: 400, code: 'INVALID_PAYLOAD', message };
 }
 
 function errorCode(error: unknown, depth = 0): string | undefined {

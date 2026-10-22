@@ -107,6 +107,7 @@ describe('HTTP API', () => {
       { 'Idempotency-Key': 'invalid-kind' },
     );
     expect(invalid.status).toBe(400);
+    expect((await json<{ code: string }>(invalid)).code).toBe('INVALID_PAYLOAD');
   });
 
   test('recusa walletId que não é UUID com 400, sem estourar 500', async () => {
