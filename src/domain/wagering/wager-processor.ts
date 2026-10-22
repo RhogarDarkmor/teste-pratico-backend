@@ -123,7 +123,7 @@ function checkReference(
     if (!tx.money.equals(ref.money)) {
       return FailureCode.ReferenceAmountMismatch;
     }
-    // Impede REFUND e ROLLBACK de reverterem a mesma transação.
+    // REFUND e ROLLBACK não podem reverter a mesma transação
     if (alreadyReversed) {
       return FailureCode.AlreadyReversed;
     }

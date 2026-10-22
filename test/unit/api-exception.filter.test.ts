@@ -2,7 +2,7 @@ import { expect, test, mock } from 'bun:test';
 import { BadRequestException, type ArgumentsHost } from '@nestjs/common';
 import { ApiExceptionFilter } from '../../src/http/api-exception.filter';
 
-test('temporary database connection errors return 503', () => {
+test('erro temporário de conexão com o banco vira 503', () => {
   const json = mock(() => undefined);
   const status = mock(() => ({ json }));
   const host = {

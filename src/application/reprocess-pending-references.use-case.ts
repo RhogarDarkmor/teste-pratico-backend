@@ -16,7 +16,7 @@ import { metrics } from '../observability/metrics';
 
 export interface ReprocessOptions {
   batchSize: number;
-  // Após o TTL ou o limite, a transação é rejeitada.
+  // passou do TTL ou do limite, rejeita
   ttlMs: number;
   maxAttempts: number;
   backoff: BackoffOptions;
@@ -25,9 +25,9 @@ export interface ReprocessOptions {
 export const DEFAULT_REPROCESS_OPTIONS: ReprocessOptions = {
   batchSize: 20,
   ttlMs: 10 * 60_000,
-  // O TTL limita a espera; tentativas evitam laços sem fim.
+  // o TTL limita a espera e o limite de tentativas evita loop infinito
   maxAttempts: 40,
-  // Com referência disponível, a liquidação espera no máximo ~30 s.
+  // com a referência disponível, liquida em no máximo ~30s
   backoff: { baseMs: 2_000, maxMs: 30_000 },
 };
 
@@ -75,7 +75,7 @@ export class ReprocessPendingReferencesUseCase {
   }
 
   private async run(repo: WageringRepository, transactionId: string, walletId: string): Promise<ReprocessResult> {
-    // Mantém a ordem do envio para evitar deadlocks.
+    // mesma ordem de lock do envio, senão dá deadlock
     const wallet = await repo.lockWallet(walletId);
     if (!wallet) return 'skipped';
     const locked = await repo.lockPendingTransaction(transactionId);

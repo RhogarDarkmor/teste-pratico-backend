@@ -7,7 +7,7 @@ export function isRetryable(error: unknown): boolean {
   return typeof code === 'string' && RETRYABLE.has(code);
 }
 
-// Repetir unique violation encontra a linha vencedora; também cobre serialização e deadlock.
+// repetir o 23505 acha a linha que ganhou, e serve tambem pra serialização e deadlock
 export async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {

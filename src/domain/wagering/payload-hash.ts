@@ -27,7 +27,7 @@ function canonicalize(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-// Hash apenas dos campos de negócio; a chave de idempotência fica de fora.
+// só campos de negócio entram no hash, a chave de idempotência fica de fora
 export function computePayloadHash(fields: PayloadFields): string {
   const canonical = canonicalize({
     providerId: fields.providerId,

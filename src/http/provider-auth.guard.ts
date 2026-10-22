@@ -2,7 +2,7 @@ import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/com
 
 @Injectable()
 export class ProviderAuthGuard implements CanActivate {
-  // Autenticação ainda não está implementada.
+  // autenticação ainda não implementada, ver ARCHITECTURE.md
   canActivate(_context: ExecutionContext): boolean {
     return true;
   }

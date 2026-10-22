@@ -23,7 +23,7 @@ export class ProcessWagerMessageUseCase {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
-  // Inbox e efeitos financeiros são confirmados juntos; o ack vem depois.
+  // inbox e efeito financeiro entram no mesmo commit, o ack vem depois
   async execute(body: string): Promise<ProcessMessageOutcome> {
     const startedAt = performance.now();
     const { messageId, command } = parseWagerMessage(body);

@@ -43,7 +43,7 @@ export class OutboxPublisher {
     this.options = { ...DEFAULT_PUBLISHER_OPTIONS, ...options };
   }
 
-  // O lock protege o lote até o commit; se cair, outro publisher tenta de novo.
+  // o lock segura o lote até o commit, se cair outro publisher pega de novo
   async runOnce(): Promise<PublishRunResult> {
     return withRetry(() =>
       this.em.fork().transactional(async (tem) => {

@@ -18,11 +18,11 @@ As regras ficam em `src/domain` (Money, Wallet, WagerTransaction), sem banco nem
 
 ## ORM e persistência
 
-Usei MikroORM para configurar o PostgreSQL, controlar transações e rodar migrations. Escolhi SQL parametrizado nos repositórios porque preciso deixar explícitos os `FOR UPDATE`, `SKIP LOCKED`, constraints e consultas de ledger. Assim não uso o Unit of Work, o Identity Map nem o `LockMode` do ORM; em troca, as queries críticas e seus locks ficam visíveis e sob controle.
+O MikroORM cuida da conexão, das transações e das migrations. Nos repositórios usei SQL parametrizado na mão, porque queria ver exatamente onde entra cada `FOR UPDATE` e `SKIP LOCKED`. Com isso abri mão do Unit of Work, do Identity Map e do `LockMode` do ORM. Pra esse problema achei que valia a troca: as queries que mexem com dinheiro e os locks delas ficam todos à vista.
 
 ## Dinheiro
 
-Nada de `number`. Money usa decimal.js com 2 casas e na API vai como string. No Postgres o valor fica em `numeric(20,2)` e a moeda em uma coluna separada. As consultas leem o decimal com `::text` e reidratam o objeto com `Money.fromPersisted`; valores que chegam pela API passam por `Money.from`.
+Nada de `number`. Money usa decimal.js com 2 casas e na API vai como string. No Postgres o valor fica em `numeric(20,2)` e a moeda em uma coluna separada. Na leitura o decimal vem com `::text` e vira Money pelo `Money.fromPersisted`. O que chega pela API passa pelo `Money.from`, que é mais rígido.
 
 ## Concorrência
 
@@ -39,7 +39,7 @@ PENDING           -> PROCESSED | REJECTED | FAILED | PENDING_REFERENCE
 PENDING_REFERENCE -> PENDING_REFERENCE | PROCESSED | REJECTED | FAILED
 ```
 
-`PROCESSED`, `REJECTED` e `FAILED` são terminais: depois deles não há novas transições.
+`PROCESSED`, `REJECTED` e `FAILED` são terminais, depois deles a transação não muda mais.
 
 ## Reversões
 
@@ -51,9 +51,9 @@ Por que 10 min: fora de ordem normalmente é questão de segundos (fila, retry d
 
 Na entrada grava no inbox, processa e marca, tudo junto. O ack só sai depois do commit, então se cair a mensagem volta e o inbox segura. Erro permanente vai direto pra DLQ, transitório depois de 5 tentativas.
 
-No fluxo de entrada, uma falha permanente encaminha a mensagem para a DLQ; o consumidor não grava a transação como `FAILED`. A falha pode ocorrer antes de haver uma transação válida para atualizar ou quando não é seguro contar com o banco. Por isso, `FAILED` está definido no domínio, mas fica reservado e não é produzido atualmente pelo fluxo SQS.
+Uma coisa que deixei de fora: quando a mensagem vai pra DLQ eu não gravo a transação como `FAILED`. Na maioria dos casos o erro acontece antes de existir uma transação válida, ou é justamente o banco que está com problema. Então o `FAILED` existe no domínio mas hoje nenhum fluxo usa.
 
-Na saída o evento vira `OutboxMessage` com `enqueue`. A mensagem encapsula tentativas, backoff e publicação; o publisher chama `scheduleRetry` ou `markPublished`, e o repositório persiste o novo estado. O publisher lê o outbox com `SKIP LOCKED` e usa o id do evento como dedup no SQS, porque pode publicar duas vezes. Um sequence gerado pelo Postgres ordena os eventos; eventos anteriores da mesma carteira bloqueiam os seguintes até serem publicados, inclusive durante retries.
+Na saída o evento vira `OutboxMessage` pelo `enqueue`. Tentativas e backoff ficam na própria mensagem (`scheduleRetry` e `markPublished`), o repositório só salva. O publisher lê com `SKIP LOCKED` e usa o id do evento como dedup no SQS, porque pode publicar duas vezes. A ordem vem de um sequence do Postgres: enquanto um evento da carteira não sai, os seguintes dela esperam, mesmo durante o retry.
 
 ## Observabilidade
 
@@ -61,16 +61,16 @@ Log em JSON com correlation id, `/metrics` pro Prometheus (outbox lag vem do ban
 
 ## Autenticação
 
-Não fiz, não vale ponto e preferi focar no financeiro. O `ProviderAuthGuard` está ligado ao endpoint de transações como ponto explícito de extensão; hoje ele permite a chamada sem autenticação. Faria com Keycloak via OIDC e um guard checando se o provedor do token é o mesmo da transação.
+Não fiz, não vale ponto e preferi focar no financeiro. Deixei o `ProviderAuthGuard` ligado no endpoint de transações como ponto de extensão, hoje ele deixa tudo passar. Faria com Keycloak via OIDC e um guard checando se o provedor do token é o mesmo da transação.
 
 ## Limitações
 
 - Metricas em memoria por instância.
 - Conciliação só sob demanda.
 - Eventos de carteiras diferentes não têm uma ordem global garantida.
-- Os horários do ledger e do próximo retry do outbox vêm do relógio da instância. O lock da carteira garante a ordem real de gravação, mas com relógios defasados entre instâncias a listagem do ledger (ordenada por `created_at`) pode mostrar um lançamento fora de sequência e um retry pode sair alguns segundos antes ou depois. Saldo, conciliação e ordem dos eventos não são afetados. A correção seria uma sequência do banco no ledger, como já é feito no outbox.
-- O teste de carga local é um cenário reproduzível, não uma medição de capacidade de produção; os resultados dependem da máquina e do Docker.
+- O horário do ledger e do retry do outbox vem do relógio da instância. Se os relógios estiverem defasados, a listagem do ledger (ordenada por `created_at`) pode mostrar um lançamento fora de ordem e um retry pode sair uns segundos antes ou depois. Saldo, conciliação e ordem dos eventos não mudam. Daria pra resolver com um sequence no ledger, igual fiz no outbox.
+- O teste de carga roda local, então mostra o comportamento e não a capacidade real. Os números mudam bastante conforme a máquina e o Docker.
 
 ## Como rodar
 
-`bun run infra:up`, `bun run db:migrate` e `bun run test`. O teste mais completo de concorrência é `test/integration/multi-instance.test.ts`; para a medição de carga, rode `bun run test:load` e consulte `docs/LOAD_TEST.md`.
+`bun run infra:up`, `bun run db:migrate` e `bun run test`. O teste mais completo de concorrência é o `test/integration/multi-instance.test.ts`. O de carga é `bun run test:load`, e os resultados estão no `docs/LOAD_TEST.md`.

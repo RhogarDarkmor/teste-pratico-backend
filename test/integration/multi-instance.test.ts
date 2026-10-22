@@ -10,7 +10,7 @@ import {
 import { OpenWalletUseCase } from '../../src/application/open-wallet.use-case';
 import { createTestDatabase, type TestDatabase } from '../helpers/database';
 
-// Cinco processos disputam as carteiras por HTTP e SQS, com duplicatas e uma queda durante a carga.
+// cinco processos disputando as carteiras por HTTP e SQS, com duplicatas e uma queda no meio
 const INSTANCES = 5;
 const BASE_PORT = 3410;
 const WALLETS = 4;
@@ -70,7 +70,7 @@ async function waitReady(instance: Instance, timeoutMs = 40_000): Promise<void> 
       const res = await fetch(`http://127.0.0.1:${instance.port}/health/ready`);
       if (res.status === 200) return;
     } catch {
-      // A instância pode ainda estar iniciando.
+      // pode estar subindo ainda
     }
     await Bun.sleep(300);
   }
@@ -87,7 +87,7 @@ beforeAll(async () => {
   db = await createTestDatabase();
   sqs = new SQSClient({ region: 'us-east-1', endpoint, credentials: { accessKeyId: 'test', secretAccessKey: 'test' } });
   open = new OpenWalletUseCase(db.orm.em as any);
-  // Reduz a espera pela redelivery após a queda.
+  // diminui a espera pela redelivery depois da queda
   inputUrl = await createQueue('multi-input', { VisibilityTimeout: '5' });
   dlqUrl = await createQueue('multi-dlq');
   eventsUrl = await createQueue('multi-events');
@@ -116,7 +116,7 @@ async function pool<T>(items: T[], concurrency: number, fn: (item: T) => Promise
   );
 }
 
-// Tenta outra instância com a mesma chave se uma não responder.
+// se uma instância não responde, tenta outra com a mesma chave
 async function postTransaction(startAt: number, key: string, body: unknown): Promise<number> {
   for (let attempt = 0; attempt < INSTANCES * 3; attempt++) {
     const instance = instances[(startAt + attempt) % INSTANCES]!;
@@ -129,7 +129,7 @@ async function postTransaction(startAt: number, key: string, body: unknown): Pro
       await res.text();
       if (res.status < 500) return res.status;
     } catch {
-      // Tenta a próxima instância.
+      // tenta a próxima
     }
     await Bun.sleep(200);
   }

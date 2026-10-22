@@ -1,29 +1,35 @@
 # Teste de carga
 
-O teste roda com `bun run test:load`. Antes, suba PostgreSQL e LocalStack com
-`bun run infra:up`. O script cria um banco de teste e filas SQS temporários,
-sobe três processos reais da API e remove os recursos temporários ao terminar.
-Ele não usa o banco de desenvolvimento nem as filas habituais do projeto.
+Roda com `bun run test:load`, depois de subir Postgres e LocalStack com
+`bun run infra:up`. O script cria um banco e filas SQS só pra ele, sobe três
+processos reais da API e apaga tudo no final. Não mexe no banco de dev nem nas
+filas normais do projeto.
 
-Por padrão, envia 300 requisições HTTP concorrentes (até 24 ao mesmo tempo)
-para uma única carteira. Cada requisição é uma aposta `BET` de `0.01 BRL`, com
-uma chave de idempotência diferente. O saldo inicial cobre todas as apostas.
-O publisher do outbox fica ativo e envia eventos para uma fila FIFO exclusiva
-do teste; o consumidor de entrada SQS e o worker de referências ficam desligados,
-pois a carga medida é a entrada HTTP.
+## Como funciona
 
-O throughput e as latências são medidos durante o envio das requisições; p50,
-p95 e p99 usam a latência de cada resposta HTTP. A taxa de erro técnico conta
-falhas de transporte e respostas HTTP 5xx; respostas fora do status esperado
-também aparecem separadas. Conflitos de lock são a diferença do contador da
-aplicação entre o início e o fim da execução, somada entre as três instâncias.
-O lag máximo é o maior valor amostrado logo após a carga e enquanto o outbox
-drena; o lag final precisa chegar a zero. O script também confere saldo, soma do
-ledger e quantidade de transações e lançamentos.
+Por padrão manda 300 requisições HTTP (até 24 ao mesmo tempo) pra uma carteira
+só. Cada uma é uma `BET` de `0.01 BRL` com uma chave de idempotência diferente,
+e o saldo inicial cobre todas. O publisher do outbox fica ligado e publica numa
+fila FIFO do próprio teste. O consumer do SQS e o worker de pendentes ficam
+desligados, porque o que eu queria medir era a entrada HTTP.
 
-## Última execução registrada
+O que é medido:
 
-Executada em 22/10/2026, usando o padrão de 300 requisições e concorrência 24:
+- throughput e latência (p50, p95, p99) durante o envio, pela resposta de cada
+  requisição;
+- erro técnico: falha de transporte ou resposta 5xx. Status fora do esperado
+  aparece separado;
+- conflitos de lock: diferença do contador da aplicação entre o começo e o fim,
+  somando as três instâncias;
+- lag do outbox: o maior valor visto logo depois da carga e enquanto o outbox
+  esvazia. No final ele tem que chegar a zero.
+
+No fim o script confere saldo, soma do ledger e quantidade de transações e
+lançamentos.
+
+## Última execução
+
+Rodei em 22/10/2026 com o padrão (300 requisições, concorrência 24):
 
 | Medida | Resultado |
 |---|---:|
@@ -44,27 +50,28 @@ Executada em 22/10/2026, usando o padrão de 300 requisições e concorrência 2
 | Saldo da carteira / saldo reconstituído do ledger | `1.00 BRL` / `1.00 BRL` |
 | Lançamentos no ledger | 301, incluindo a abertura da carteira |
 
-Uma primeira execução no mesmo ambiente e com os mesmos parâmetros mediu
-23.10 requisições/s (p50 1019.54 ms, p95 2061.65 ms, p99 2541.42 ms) e lag
-máximo amostrado de 19.87 s. A variação entre execuções está registrada; não
-trato uma única medição como capacidade garantida.
+Antes dessa rodei uma vez com os mesmos parâmetros e deu 23.10 requisições/s
+(p50 1019.54 ms, p95 2061.65 ms, p99 2541.42 ms) e lag máximo de 19.87 s. Deixei
+as duas pra mostrar que varia bastante de uma execução pra outra.
 
-Este é um resultado de uma execução local, com uma carteira quente e serviços
-em containers na mesma máquina. Serve para documentar a metodologia e o
-comportamento observado; não representa capacidade de produção nem uma meta de
-desempenho.
+## O que eu tiro disso
 
-Todas as apostas disputam a mesma carteira. O `SELECT ... FOR UPDATE` faz uma
-requisição aguardar a anterior terminar, então a carteira quente serializa o
-trabalho e explica a latência crescente e o throughput observado; estes números
-não indicam que a CPU seja o limite geral do serviço. Os zero conflitos de lock
-são esperados com o lock pessimista: as requisições aguardam a vez em vez de
-perderem uma atualização ou falharem por conflito otimista. O lag do outbox
-reflete a publicação ordenada: só o primeiro evento pendente de cada carteira
-fica elegível por ciclo. Com uma única carteira, os eventos saem em sequência;
-o intervalo de polling também afeta o tempo quando o publisher está ocioso,
-mas a fila serial por carteira é a característica mais relevante neste cenário.
+Tudo roda na mesma máquina, com uma carteira quente e os serviços em container.
+Serve pra mostrar o comportamento, não é capacidade de produção nem meta.
 
-Para ajustar o cenário, use `LOAD_REQUESTS` (1 a 5000), `LOAD_CONCURRENCY`
-(1 até o total de requisições) e, se necessário, `LOAD_BASE_PORT` para escolher
-uma porta base livre para os três processos.
+Todas as apostas disputam a mesma carteira, e o `SELECT ... FOR UPDATE` faz
+cada uma esperar a anterior terminar. Ou seja, a carteira serializa o trabalho,
+e é isso que explica a latência subindo e o throughput baixo. Não quer dizer que
+a CPU seja o limite do serviço. Zero conflitos de lock é o esperado com lock
+pessimista: a requisição espera a vez, em vez de falhar ou perder atualização.
+
+O lag do outbox vem da publicação em ordem: só o primeiro evento pendente de
+cada carteira pode sair por ciclo, então com uma carteira só os eventos saem em
+fila. O intervalo de polling pesa um pouco quando o publisher está parado, mas
+a fila por carteira é o que mais conta nesse cenário.
+
+## Ajustando o cenário
+
+Dá pra mudar com `LOAD_REQUESTS` (1 a 5000), `LOAD_CONCURRENCY` (1 até o total
+de requisições) e, se a porta estiver ocupada, `LOAD_BASE_PORT` pra escolher a
+porta base dos três processos.

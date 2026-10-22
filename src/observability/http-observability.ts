@@ -27,7 +27,7 @@ export function httpObservability(req: Req, res: Res, next: () => void): void {
   const startedAt = performance.now();
   res.once('finish', () => {
     const seconds = (performance.now() - startedAt) / 1000;
-    // Usa o padrão da rota para evitar cardinalidade por ID.
+    // usa o padrão da rota pra não explodir a cardinalidade com IDs
     const route = req.route?.path ?? 'unmatched';
     metrics.httpRequests.inc({ method: req.method, route, status: String(res.statusCode) });
     metrics.httpDuration.observe(seconds, { method: req.method, route });

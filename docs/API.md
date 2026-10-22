@@ -1,10 +1,10 @@
 # API HTTP
 
-Todos os valores monetários entram e saem como texto, com a moeda explícita.
-O endpoint de transações exige `Idempotency-Key`; a chave é persistida no banco
-e uma repetição com o mesmo conteúdo devolve o resultado original.
-Os valores devem caber em `numeric(20,2)`: no máximo
-`999999999999999999.99`; valores maiores são rejeitados como entrada inválida.
+Valor monetário sempre entra e sai como texto, com a moeda junto.
+O endpoint de transações exige `Idempotency-Key`. A chave fica salva no banco,
+então repetir com o mesmo conteúdo devolve o resultado original.
+O valor precisa caber em `numeric(20,2)`, ou seja, no máximo
+`999999999999999999.99`. Acima disso volta 400.
 
 ## Endpoints
 
@@ -62,5 +62,5 @@ Rejeição é resposta final, reenviar a mesma coisa devolve a mesma rejeição 
 
 SHA-256 de um JSON canônico (chaves em ordem alfabética, sem espaços) com só os campos de negócio: `providerId`, `externalTransactionId`, `playerId`, `walletId`, `roundId`, `gameId`, `kind`, `money` e `referenceExternalTransactionId` (`null` se não tiver). O valor passa pelo Money antes, então `"25"` e `"25.00"` dão o mesmo hash. O header `Idempotency-Key` e os ids internos não entram. Código em `src/domain/wagering/payload-hash.ts`.
 
-O cursor do ledger é opaco, versionado e carrega a precisão completa do
-timestamp usado na ordenação, além do ID como desempate.
+O cursor do ledger é opaco e versionado. Por dentro ele leva o timestamp com
+precisão completa e o id pra desempate.

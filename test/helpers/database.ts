@@ -12,7 +12,7 @@ export interface TestDatabase {
   drop: () => Promise<void>;
 }
 
-// Isola cada suíte do banco de desenvolvimento e das demais.
+// cada suíte tem banco próprio, separado do de dev e das outras
 export async function createTestDatabase(options: { migrate?: boolean } = {}): Promise<TestDatabase> {
   const name = `wagering_test_${randomUUID().replaceAll('-', '')}`;
 

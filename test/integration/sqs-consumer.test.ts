@@ -136,7 +136,7 @@ describe('SqsConsumer', () => {
   test('mensagem reentregue (ack perdido) não duplica o efeito', async () => {
     const w = await newWallet();
     await send(wagerBody(w, 'msg-redelivery'), w.walletId);
-    // Simula ack perdido, seguido de redelivery.
+    // simula ack perdido e redelivery
     const lostAck = new Proxy(sqs, {
       get(target, prop, receiver) {
         if (prop !== 'send') return Reflect.get(target, prop, receiver);

@@ -31,7 +31,7 @@ export interface ConsumerLogger {
 
 export type Failure = 'permanent' | 'transient';
 
-// Erros permanentes vão à DLQ; os demais são repetidos com backoff.
+// permanente vai pra DLQ, o resto tenta de novo com backoff
 export function classifyFailure(error: unknown): Failure {
   if (
     error instanceof InvalidMessageError ||
@@ -83,7 +83,7 @@ export class SqsConsumer {
     );
     const messages = response.Messages ?? [];
 
-    // Mantém a ordem por grupo e processa grupos diferentes em paralelo.
+    // ordem dentro do grupo, grupos diferentes em paralelo
     const groups = new Map<string, Message[]>();
     for (const message of messages) {
       const group = message.Attributes?.MessageGroupId ?? message.MessageId!;
@@ -95,7 +95,7 @@ export class SqsConsumer {
 
   private async handleGroup(messages: Message[]): Promise<void> {
     for (let i = 0; i < messages.length; i++) {
-      // No shutdown ou após falha, libera as mensagens seguintes do grupo.
+      // no shutdown ou depois de uma falha, devolve as próximas do grupo
       if (this.stopping) {
         await this.release(messages.slice(i));
         return;
@@ -114,7 +114,7 @@ export class SqsConsumer {
     } catch (error) {
       return this.handleFailure(message, error);
     }
-    // O ack vem após o commit; a inbox protege contra redelivery se o delete falhar.
+    // ack só depois do commit, se o delete falhar a inbox segura a redelivery
     return this.ack(message);
   }
 

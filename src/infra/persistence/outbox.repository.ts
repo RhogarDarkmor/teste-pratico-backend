@@ -6,9 +6,9 @@ const ts = (column: string) => `to_char(${column} at time zone 'UTC', 'YYYY-MM-D
 export class OutboxRepository {
   constructor(private readonly em: Pick<EntityManager, 'execute'>) {}
 
-  // SKIP LOCKED divide as mensagens entre publishers até o commit.
+  // SKIP LOCKED divide as mensagens entre os publishers até o commit
   async claimPending(limit: number): Promise<OutboxMessage[]> {
-    // Só libera o primeiro evento pendente de cada carteira.
+    // só libera o primeiro evento pendente de cada carteira
     const rows = await this.em.execute(
       `select id, aggregate_id, event_type, payload, ${ts('occurred_at')} as occurred_at, attempts,
               ${ts('next_attempt_at')} as next_attempt_at, ${ts('published_at')} as published_at

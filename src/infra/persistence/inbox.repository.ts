@@ -6,7 +6,7 @@ const ts = (column: string) => `to_char(${column} at time zone 'UTC', 'YYYY-MM-D
 export class InboxRepository {
   constructor(private readonly em: Pick<EntityManager, 'execute'>) {}
 
-  // Em conflito, o insert espera a transação concorrente e devolve o registro existente.
+  // em conflito o insert espera a outra transação e devolve o registro que já existe
   async receive(message: InboxMessage): Promise<{ inserted: boolean; stored: InboxMessage }> {
     const rows = await this.em.execute(
       `insert into inbox_messages (consumer_name, message_id, payload_hash, received_at)

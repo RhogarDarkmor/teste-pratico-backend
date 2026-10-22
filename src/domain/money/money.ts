@@ -1,7 +1,7 @@
 import DecimalJs from 'decimal.js';
 import { CurrencyMismatchError, InvalidMoneyError } from '../errors/money.errors';
 
-// Mantém a precisão do domínio independente da configuração global.
+// precisão própria, não depende da config global do decimal.js
 const Decimal = DecimalJs.clone({ precision: 40 });
 type Decimal = DecimalJs;
 
@@ -30,7 +30,7 @@ export class Money {
     return Money.create(new Decimal(amount), currency);
   }
 
-  // Dados persistidos podem ser negativos; entradas externas não.
+  // valor do banco pode ser negativo, entrada externa não
   static fromPersisted(props: MoneyProps): Money {
     Money.assertCurrency(props.currency);
     let value: Decimal;

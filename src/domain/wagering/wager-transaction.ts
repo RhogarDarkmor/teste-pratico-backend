@@ -192,7 +192,7 @@ export class WagerTransaction {
     return this.payloadHash === payloadHash;
   }
 
-  // ROLLBACK inverte a direção da referência.
+  // ROLLBACK inverte a direção da referência
   ledgerDirectionFor(reference?: WagerTransaction): LedgerDirection {
     switch (this.kind) {
       case WagerTransactionKind.Bet:

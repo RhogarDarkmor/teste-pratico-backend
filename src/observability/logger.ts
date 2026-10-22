@@ -18,7 +18,7 @@ export function setLogSink(next: Sink | undefined): void {
 
 const silent = () => process.env.NODE_ENV === 'test' && sink === stdout;
 
-// Campos que nunca devem ir para o log: valores financeiros e payloads inteiros.
+// nunca vão pro log: valores financeiros e payload inteiro
 const FORBIDDEN = new Set(['amount', 'balance', 'money', 'payload', 'body', 'initialBalance']);
 
 function write(level: LogLevel, context: string | undefined, message: unknown, extra?: LogFields): void {

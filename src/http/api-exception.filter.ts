@@ -76,7 +76,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
   }
 }
 
-// Todo 400 sai com code, inclusive os gerados pelo Nest (ex.: JSON malformado).
+// todo 400 sai com code, até os do próprio Nest (JSON malformado por ex.)
 function badRequestBody(body: string | object): { statusCode: number; code: string; message: unknown } {
   if (typeof body === 'object' && 'code' in body && typeof body.code === 'string') {
     return { statusCode: 400, code: body.code, message: 'message' in body ? body.message : undefined };

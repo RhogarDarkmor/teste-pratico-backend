@@ -49,7 +49,7 @@ bun run test
 
 O mais completo é `test/integration/multi-instance.test.ts`: sobe 5 instâncias reais da API, mistura HTTP e SQS, envia tudo duplicado, mata uma instância no meio e no fim confere saldo, ledger, DLQ, outbox e conciliação. Ele leva uns 2 minutos.
 
-O teste de carga usa PostgreSQL e LocalStack do Docker, inicia 3 instâncias reais da API e envia 300 apostas HTTP concorrentes para a mesma carteira. Ao final, confere saldo e ledger, e espera o outbox esvaziar. Rode com `bun run infra:up` antes; a metodologia e os resultados da última execução ficam em [docs/LOAD_TEST.md](docs/LOAD_TEST.md). Não há meta fixa de throughput: os números servem para descrever a execução no ambiente registrado.
+O teste de carga (`bun run test:load`, também precisa do `infra:up` antes) sobe 3 instâncias reais e manda 300 apostas HTTP ao mesmo tempo pra mesma carteira. No fim confere saldo e ledger e espera o outbox esvaziar. Como foi medido, os números e o que eu concluí estão em [docs/LOAD_TEST.md](docs/LOAD_TEST.md).
 
 ## Configuração
 
