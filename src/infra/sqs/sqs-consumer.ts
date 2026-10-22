@@ -31,8 +31,7 @@ export interface ConsumerLogger {
 
 export type Failure = 'permanent' | 'transient';
 
-// Erros de domínio e mensagens inválidas não melhoram com nova tentativa: vão direto para a DLQ.
-// O resto (banco fora, deadlock, erro inesperado) é tratado como transitório e tenta de novo com backoff.
+// Erros permanentes vão à DLQ; os demais são repetidos com backoff.
 export function classifyFailure(error: unknown): Failure {
   if (
     error instanceof InvalidMessageError ||
@@ -65,7 +64,6 @@ export class SqsConsumer {
     this.loop = this.run();
   }
 
-  // Para de buscar mensagens e espera as que já estão em andamento terminarem.
   async stop(): Promise<void> {
     this.running = false;
     this.stopping = true;
@@ -73,7 +71,6 @@ export class SqsConsumer {
     await this.loop;
   }
 
-  // Uma busca: pega até 10 mensagens e processa. Devolve quantas chegaram.
   async pollOnce(signal?: AbortSignal): Promise<number> {
     const response = await this.sqs.send(
       new ReceiveMessageCommand({
@@ -86,7 +83,7 @@ export class SqsConsumer {
     );
     const messages = response.Messages ?? [];
 
-    // FIFO: dentro de um grupo a ordem importa; grupos diferentes andam em paralelo
+    // Mantém a ordem por grupo e processa grupos diferentes em paralelo.
     const groups = new Map<string, Message[]>();
     for (const message of messages) {
       const group = message.Attributes?.MessageGroupId ?? message.MessageId!;
@@ -98,7 +95,7 @@ export class SqsConsumer {
 
   private async handleGroup(messages: Message[]): Promise<void> {
     for (let i = 0; i < messages.length; i++) {
-      // no shutdown, ou depois de uma falha, as demais voltam a ficar visíveis sem ser processadas fora de ordem
+      // No shutdown ou após falha, libera as mensagens seguintes do grupo.
       if (this.stopping) {
         await this.release(messages.slice(i));
         return;
@@ -111,14 +108,13 @@ export class SqsConsumer {
     }
   }
 
-  // true quando a mensagem foi resolvida (ack ou DLQ); false quando fica para uma nova tentativa
   private async handle(message: Message): Promise<boolean> {
     try {
       await this.processor.execute(message.Body ?? '');
     } catch (error) {
       return this.handleFailure(message, error);
     }
-    // ack só depois do commit; se este delete falhar, a reentrega cai na inbox como duplicada
+    // O ack vem após o commit; a inbox protege contra redelivery se o delete falhar.
     return this.ack(message);
   }
 

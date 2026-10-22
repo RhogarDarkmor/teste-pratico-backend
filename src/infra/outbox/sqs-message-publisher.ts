@@ -5,8 +5,7 @@ export interface MessagePublisher {
   publish(message: OutboxMessage): Promise<void>;
 }
 
-// A fila FIFO está sem deduplicação por conteúdo, então o id do evento é a chave de deduplicação.
-// O grupo é a carteira: eventos da mesma carteira seguem em ordem.
+// O ID deduplica eventos; a carteira mantém a ordem na fila FIFO.
 export class SqsMessagePublisher implements MessagePublisher {
   constructor(
     private readonly sqs: Pick<SQSClient, 'send'>,

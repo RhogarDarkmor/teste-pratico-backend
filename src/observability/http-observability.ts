@@ -18,7 +18,6 @@ interface Res {
   once(event: 'finish', listener: () => void): void;
 }
 
-// Garante um correlationId por requisição (aproveita o do cliente) e registra log e métricas no fim.
 export function httpObservability(req: Req, res: Res, next: () => void): void {
   const incoming = req.headers['x-correlation-id'];
   const correlationId = (Array.isArray(incoming) ? incoming[0] : incoming)?.trim() || newId();
@@ -28,7 +27,7 @@ export function httpObservability(req: Req, res: Res, next: () => void): void {
   const startedAt = performance.now();
   res.once('finish', () => {
     const seconds = (performance.now() - startedAt) / 1000;
-    // o route é o padrão (/wallets/:walletId), para não explodir a cardinalidade com ids
+    // Usa o padrão da rota para evitar cardinalidade por ID.
     const route = req.route?.path ?? 'unmatched';
     metrics.httpRequests.inc({ method: req.method, route, status: String(res.statusCode) });
     metrics.httpDuration.observe(seconds, { method: req.method, route });

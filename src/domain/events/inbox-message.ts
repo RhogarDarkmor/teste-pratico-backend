@@ -6,7 +6,6 @@ export interface InboxMessageState {
   processedAt?: Date;
 }
 
-// Registro de que uma mensagem do SQS já foi vista por um consumidor.
 export class InboxMessage {
   private _processedAt: Date | undefined;
 

@@ -46,7 +46,7 @@ export interface SubmitWagerResult {
 
 const logger = createLogger('SubmitWagerTransaction');
 
-// Chamado só depois do commit, para a métrica não contar o que acabou revertido.
+// Mede só transações confirmadas.
 export function observeSubmitted(
   origin: 'http' | 'sqs',
   command: SubmitWagerCommand,
@@ -89,7 +89,7 @@ export class SubmitWagerTransactionUseCase {
     return result;
   }
 
-  // para quem já abriu a transação (o consumidor SQS grava a inbox na mesma transação)
+  // Usado pelo consumidor para gravar a inbox na mesma transação.
   executeWithin(tem: Pick<EntityManager, 'execute'>, command: SubmitWagerCommand): Promise<SubmitWagerResult> {
     return this.run(new WageringRepository(tem), command);
   }
@@ -101,7 +101,7 @@ export class SubmitWagerTransactionUseCase {
       throw new WalletNotFoundError(`Wallet ${command.walletId} not found`);
     }
 
-    // O timestamp é criado depois do lock para refletir a ordem de processamento da carteira.
+    // Criado após o lock para respeitar a ordem da carteira.
     const now = this.clock();
     const tx = WagerTransaction.create({
       id: newId(),

@@ -4,7 +4,6 @@ export interface WorkerLogger {
   error(message: string): void;
 }
 
-// Laço simples: processa o que está vencido e dorme quando não há nada a fazer.
 export class PendingReferenceWorker {
   private running = false;
   private loop: Promise<void> | undefined;

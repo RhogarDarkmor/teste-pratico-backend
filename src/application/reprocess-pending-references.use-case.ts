@@ -16,7 +16,7 @@ import { metrics } from '../observability/metrics';
 
 export interface ReprocessOptions {
   batchSize: number;
-  // depois disso (ou de tantas tentativas) a referência é considerada perdida e a transação é rejeitada
+  // Após o TTL ou o limite, a transação é rejeitada.
   ttlMs: number;
   maxAttempts: number;
   backoff: BackoffOptions;
@@ -25,9 +25,9 @@ export interface ReprocessOptions {
 export const DEFAULT_REPROCESS_OPTIONS: ReprocessOptions = {
   batchSize: 20,
   ttlMs: 10 * 60_000,
-  // o TTL é o limite de verdade; as tentativas só protegem contra laço infinito
+  // O TTL limita a espera; tentativas evitam laços sem fim.
   maxAttempts: 40,
-  // teto baixo: quando a referência chega, a transação espera no máximo ~30s para ser liquidada
+  // Com referência disponível, a liquidação espera no máximo ~30 s.
   backoff: { baseMs: 2_000, maxMs: 30_000 },
 };
 
@@ -75,11 +75,11 @@ export class ReprocessPendingReferencesUseCase {
   }
 
   private async run(repo: WageringRepository, transactionId: string, walletId: string): Promise<ReprocessResult> {
-    // mesma ordem do envio (carteira primeiro, depois a transação) para não dar deadlock
+    // Mantém a ordem do envio para evitar deadlocks.
     const wallet = await repo.lockWallet(walletId);
     if (!wallet) return 'skipped';
     const locked = await repo.lockPendingTransaction(transactionId);
-    if (!locked) return 'skipped'; // outro worker pegou, ou já foi resolvida
+    if (!locked) return 'skipped';
 
     const { transaction: tx, attempts } = locked;
     const now = this.clock();
@@ -116,7 +116,6 @@ export class ReprocessPendingReferencesUseCase {
         await repo.scheduleReprocess(tx.id, nextAttempts, backoffDelayMs(nextAttempts, this.options.backoff));
         return 'waiting';
       }
-      // a referência existe mas nunca saiu do pendente, ou nem chegou
       tx.reject(reference ? FailureCode.ReferenceNotProcessed : FailureCode.ReferenceNotFound);
       events.push(WagerTransactionRejected.from(tx, ctx()));
       result = 'expired';

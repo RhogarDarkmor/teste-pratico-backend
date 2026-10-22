@@ -136,7 +136,7 @@ describe('SqsConsumer', () => {
   test('mensagem reentregue (ack perdido) não duplica o efeito', async () => {
     const w = await newWallet();
     await send(wagerBody(w, 'msg-redelivery'), w.walletId);
-    // o delete "se perde": a mensagem volta a ficar visível, como numa reentrega do SQS
+    // Simula ack perdido, seguido de redelivery.
     const lostAck = new Proxy(sqs, {
       get(target, prop, receiver) {
         if (prop !== 'send') return Reflect.get(target, prop, receiver);
@@ -253,7 +253,6 @@ describe('SqsConsumer', () => {
     expect(order).toEqual(['ord-1']);
     expect(await balanceOf(w.walletId)).toBe('100.00');
 
-    // o que sobrou segue a fila normalmente, e o saldo mostra que nenhuma se perdeu
     const healthy = consumer(real);
     for (let i = 0; i < 10; i++) {
       await healthy.pollOnce();

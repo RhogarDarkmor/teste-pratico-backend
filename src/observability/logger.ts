@@ -11,7 +11,7 @@ const stdout: Sink = (text) => {
 
 let sink: Sink = stdout;
 
-// em teste não polui a saída; os testes de log trocam o destino por um array
+
 export function setLogSink(next: Sink | undefined): void {
   sink = next ?? stdout;
 }
@@ -46,7 +46,6 @@ export function createLogger(context: string): AppLogger {
   };
 }
 
-// Logger do Nest em JSON: serve tanto para mensagens em texto quanto para objetos com campos.
 export class JsonLogger implements LoggerService {
   log(message: unknown, context?: string): void {
     write('info', context, message);

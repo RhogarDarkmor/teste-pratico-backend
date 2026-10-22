@@ -12,7 +12,6 @@ export interface OutboxMessageProps {
   publishedAt?: Date;
 }
 
-// Mensagem do outbox: o evento já serializado, esperando para ir ao SQS.
 export class OutboxMessage {
   readonly id: string;
   readonly aggregateId: string;
@@ -69,7 +68,6 @@ export class OutboxMessage {
     return !this.isPublished;
   }
 
-  // sem nextAttemptAt a mensagem está disponível desde que ocorreu
   isDue(now: Date): boolean {
     if (!this.isPending()) return false;
     return (this._nextAttemptAt ?? this.occurredAt).getTime() <= now.getTime();

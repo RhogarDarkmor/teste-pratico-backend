@@ -123,7 +123,7 @@ function checkReference(
     if (!tx.money.equals(ref.money)) {
       return FailureCode.ReferenceAmountMismatch;
     }
-    // vale pra refund e rollback juntos, senão a bet voltava duas vezes
+    // Impede REFUND e ROLLBACK de reverterem a mesma transação.
     if (alreadyReversed) {
       return FailureCode.AlreadyReversed;
     }

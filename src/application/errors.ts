@@ -20,7 +20,6 @@ export class InvalidQueryError extends DomainError {
   readonly code = 'INVALID_QUERY';
 }
 
-// mensagem do SQS malformada ou incoerente: reenviar não adianta
 export class InvalidMessageError extends DomainError {
   readonly code = 'INVALID_MESSAGE';
 }

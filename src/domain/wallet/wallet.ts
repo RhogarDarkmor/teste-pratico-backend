@@ -76,7 +76,6 @@ export class Wallet {
     return this.apply(LedgerDirection.Credit, this._balance.add(props.amount), props);
   }
 
-  // saldo e ledger mudam juntos, só depois de tudo validado
   private apply(direction: LedgerDirection, next: Money, props: MovementProps): WalletLedgerEntry {
     const entry = WalletLedgerEntry.create({
       id: props.entryId,

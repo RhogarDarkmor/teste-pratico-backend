@@ -10,8 +10,7 @@ import {
 import { OpenWalletUseCase } from '../../src/application/open-wallet.use-case';
 import { createTestDatabase, type TestDatabase } from '../helpers/database';
 
-// Cenário médio: 5 instâncias reais da aplicação (processos separados) disputando as mesmas carteiras,
-// com entrada por HTTP e por SQS, duplicatas, estorno antes da aposta e uma instância morta e reerguida no meio.
+// Cinco processos disputam as carteiras por HTTP e SQS, com duplicatas e uma queda durante a carga.
 const INSTANCES = 5;
 const BASE_PORT = 3410;
 const WALLETS = 4;
@@ -71,7 +70,7 @@ async function waitReady(instance: Instance, timeoutMs = 40_000): Promise<void> 
       const res = await fetch(`http://127.0.0.1:${instance.port}/health/ready`);
       if (res.status === 200) return;
     } catch {
-      // ainda subindo
+      // A instância pode ainda estar iniciando.
     }
     await Bun.sleep(300);
   }
@@ -88,7 +87,7 @@ beforeAll(async () => {
   db = await createTestDatabase();
   sqs = new SQSClient({ region: 'us-east-1', endpoint, credentials: { accessKeyId: 'test', secretAccessKey: 'test' } });
   open = new OpenWalletUseCase(db.orm.em as any);
-  // visibilidade curta para a mensagem de uma instância morta voltar logo
+  // Reduz a espera pela redelivery após a queda.
   inputUrl = await createQueue('multi-input', { VisibilityTimeout: '5' });
   dlqUrl = await createQueue('multi-dlq');
   eventsUrl = await createQueue('multi-events');
@@ -117,7 +116,7 @@ async function pool<T>(items: T[], concurrency: number, fn: (item: T) => Promise
   );
 }
 
-// Como um cliente de verdade: se a instância não responde, tenta outra com a mesma Idempotency-Key.
+// Tenta outra instância com a mesma chave se uma não responder.
 async function postTransaction(startAt: number, key: string, body: unknown): Promise<number> {
   for (let attempt = 0; attempt < INSTANCES * 3; attempt++) {
     const instance = instances[(startAt + attempt) % INSTANCES]!;
@@ -130,7 +129,7 @@ async function postTransaction(startAt: number, key: string, body: unknown): Pro
       await res.text();
       if (res.status < 500) return res.status;
     } catch {
-      // instância fora do ar
+      // Tenta a próxima instância.
     }
     await Bun.sleep(200);
   }
@@ -201,7 +200,6 @@ describe('várias instâncias reais', () => {
     const loadWallets = wallets.slice(0, WALLETS);
     const refundWallet = wallets[WALLETS]!;
 
-    // estornos chegam antes das apostas que referenciam
     const lateBets = Array.from({ length: REFUND_PAIRS }, (_, i) => `late-bet-${i}`);
     const refundStatuses: number[] = [];
     await pool(lateBets, 5, async (betExt) => {
@@ -210,7 +208,6 @@ describe('várias instâncias reais', () => {
     });
     expect(refundStatuses.every((status) => status === 202)).toBe(true);
 
-    // carga: metade por HTTP e metade por SQS; tudo enviado duas vezes
     const jobs: (() => Promise<void>)[] = [];
     const httpStatuses: number[] = [];
     for (const w of loadWallets) {
@@ -233,7 +230,6 @@ describe('várias instâncias reais', () => {
     }
     jobs.sort(() => Math.random() - 0.5);
 
-    // mata uma instância no meio da carga (sem aviso) e sobe outra no lugar
     const victim = instances[0]!;
     const chaos = (async () => {
       await Bun.sleep(1_500);
@@ -270,12 +266,10 @@ describe('várias instâncias reais', () => {
     }
     expect(state).toEqual({ total: uniqueTransactions, expected: uniqueTransactions, open: 0, unpublished: 0, inFlight: 0 });
 
-    // nenhuma transação foi duplicada, apesar de cada envio ter sido feito duas vezes
     expect(await value(`select count(*)::int as v from wager_transactions`)).toBe(uniqueTransactions);
     expect(
       await value(`select count(*)::int as v from (select idempotency_key from wager_transactions group by 1 having count(*) > 1) d`),
     ).toBe(0);
-    // cada mensagem SQS entrou uma única vez na inbox
     expect(await value(`select count(*)::int as v from inbox_messages`)).toBe((WALLETS * BETS_PER_WALLET) / 2 + REFUND_PAIRS);
 
     for (const w of loadWallets) {
@@ -303,32 +297,27 @@ describe('várias instâncias reais', () => {
       expect(ledger.n).toBe(INITIAL_BALANCE + 1);
     }
 
-    // estornos: a aposta de 10.00 saiu e o estorno devolveu, então o saldo fecha em 100.00
     const refunded = await db.sql(`select status, count(*)::int as n from wager_transactions where wallet_id = ? group by 1`, [
       refundWallet.walletId,
     ]);
     expect(refunded).toEqual([{ status: 'PROCESSED', n: REFUND_PAIRS * 2 + 1 }]); // + OPENING
     expect((await db.sql(`select balance::text as b from wallets where id = ?`, [refundWallet.walletId]))[0].b).toBe('100.00');
 
-    // nada duplicado no ledger e nenhum saldo negativo
     expect(
       await value(`select count(*)::int as v from (select transaction_id from wallet_ledger_entries group by 1 having count(*) > 1) d`),
     ).toBe(0);
     expect(await value(`select count(*)::int as v from wallets where balance < 0`)).toBe(0);
     expect(await queueDepth(dlqUrl)).toBe(0);
 
-    // os eventos de domínio saíram uma vez cada (id de deduplicação = id do evento)
     const events = await value(`select count(*)::int as v from outbox_messages`);
     expect(events).toBeGreaterThan(uniqueTransactions);
     expect(await value(`select count(*)::int as v from outbox_messages where published_at is null`)).toBe(0);
 
-    // a conciliação confirma cada carteira pela API de uma instância viva
     for (const w of wallets) {
       const res = await fetch(`http://127.0.0.1:${instances[1]!.port}/wallets/${w.walletId}/reconciliation`, { method: 'POST' });
       expect(((await res.json()) as { consistent: boolean }).consistent).toBe(true);
     }
 
-    // o trabalho foi mesmo dividido entre as instâncias
     let active = 0;
     for (const instance of instances) {
       const text = await (await fetch(`http://127.0.0.1:${instance.port}/metrics`)).text();

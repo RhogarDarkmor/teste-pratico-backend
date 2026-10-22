@@ -95,7 +95,6 @@ describe('reprocessamento de PENDING_REFERENCE', () => {
     expect(after.reprocess_attempts).toBe(1);
     expect(await balanceOf(w.walletId)).toBe('100.00');
 
-    // ainda não venceu, então o ciclo não pega
     const due = await db.sql(`select 1 from wager_transactions where id = ? and next_reprocess_at <= now()`, [refundId]);
     expect(due).toHaveLength(0);
   });

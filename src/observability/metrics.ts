@@ -94,7 +94,6 @@ export class Histogram {
   }
 }
 
-// Gauge calculado na hora da leitura (por exemplo, consultando o banco).
 export class Gauge {
   private readonly logger = createLogger('Metrics');
 
@@ -167,7 +166,6 @@ export class MetricsRegistry {
     ];
   }
 
-  // registrar de novo com o mesmo nome substitui (útil quando a aplicação sobe mais de uma vez no mesmo processo)
   registerGauge(gauge: Gauge): void {
     this.gauges.set(gauge.name, gauge);
   }

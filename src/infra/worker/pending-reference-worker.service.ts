@@ -3,7 +3,6 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { ReprocessPendingReferencesUseCase } from '../../application/reprocess-pending-references.use-case';
 import { PendingReferenceWorker } from './pending-reference-worker';
 
-// Reprocessa transações que esperam a referência chegar. PENDING_REFERENCE_WORKER_ENABLED=false desliga.
 @Injectable()
 export class PendingReferenceWorkerService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(PendingReferenceWorkerService.name);

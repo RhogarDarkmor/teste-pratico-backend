@@ -4,8 +4,6 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { OutboxPublisher } from './outbox-publisher';
 import { SqsMessagePublisher } from './sqs-message-publisher';
 
-// Sobe o publicador junto com a aplicação. Sem OUTBOX_QUEUE_URL (ou com OUTBOX_PUBLISHER_ENABLED=false) fica desligado.
-// Os eventos vão para uma fila própria: a fila de entrada é só das requisições dos provedores.
 @Injectable()
 export class OutboxPublisherService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(OutboxPublisherService.name);

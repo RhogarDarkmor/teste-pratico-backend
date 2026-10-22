@@ -3,12 +3,10 @@ import { SQSClient } from '@aws-sdk/client-sqs';
 import { ProcessWagerMessageUseCase } from '../../application/process-wager-message.use-case';
 import { SqsConsumer } from './sqs-consumer';
 
-// a DLQ do docker-compose segue o nome da fila principal
 export function defaultDlqUrl(queueUrl: string): string {
   return queueUrl.replace(/\.fifo$/, '-dlq.fifo');
 }
 
-// Sobe o consumidor junto com a aplicação. Sem SQS_QUEUE_URL (ou com SQS_CONSUMER_ENABLED=false) fica desligado.
 @Injectable()
 export class SqsConsumerService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(SqsConsumerService.name);

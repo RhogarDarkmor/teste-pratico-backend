@@ -43,8 +43,7 @@ export class OutboxPublisher {
     this.options = { ...DEFAULT_PUBLISHER_OPTIONS, ...options };
   }
 
-  // Um ciclo: pega um lote, envia e marca, tudo na mesma transação. Se o processo cair no meio,
-  // o lock some e outro publicador refaz o lote (o id de deduplicação evita duplicar na fila).
+  // O lock protege o lote até o commit; se cair, outro publisher tenta de novo.
   async runOnce(): Promise<PublishRunResult> {
     return withRetry(() =>
       this.em.fork().transactional(async (tem) => {
@@ -83,7 +82,6 @@ export class OutboxPublisher {
     this.loop = this.run();
   }
 
-  // espera o ciclo em andamento terminar, para o shutdown não cortar um envio no meio
   async stop(): Promise<void> {
     this.running = false;
     this.wake?.();

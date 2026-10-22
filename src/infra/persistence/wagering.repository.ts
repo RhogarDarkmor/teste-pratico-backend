@@ -11,7 +11,7 @@ import {
 } from '../../domain/wagering/wager-transaction';
 import { Wallet } from '../../domain/wallet/wallet';
 
-// o driver devolve timestamptz como texto, então normalizo para ISO na própria consulta
+// Normaliza timestamptz para ISO na consulta.
 const ts = (column: string) => `to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 const cursorTs = (column: string) => `to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
@@ -235,7 +235,7 @@ export class WageringRepository {
     );
   }
 
-  // só lê (sem lock): quem decide é o lock por transação, feito depois do lock da carteira
+  // O lock da transação ocorre após o lock da carteira.
   async findDuePendingReferences(limit: number): Promise<{ id: string; walletId: string }[]> {
     const rows = await this.em.execute(
       `select id, wallet_id from wager_transactions

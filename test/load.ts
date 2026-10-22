@@ -106,7 +106,7 @@ async function waitUntilReady(instance: ApiInstance): Promise<void> {
       });
       if (response.ok) return;
     } catch {
-      // The instance may still be starting.
+      // A instância pode ainda estar iniciando.
     }
     await Bun.sleep(250);
   }

@@ -73,7 +73,7 @@ describe('OutboxRepository.claimPending', () => {
     let firstClaimed!: () => void;
     const firstReady = new Promise<void>((resolve) => (firstClaimed = resolve));
 
-    // o primeiro publicador segura o lock da transação até o segundo terminar
+    // Mantém os locks do primeiro lote durante a segunda consulta.
     const first = db.orm.em.fork().transactional(async (tem) => {
       const got = await new OutboxRepository(tem as any).claimPending(3);
       firstClaimed();

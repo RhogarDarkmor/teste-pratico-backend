@@ -57,7 +57,7 @@ async function seed(aggregateId: string, ageMs: number) {
 const outbox = (publisher: MessagePublisher, options = {}) =>
   new OutboxPublisher(db.orm.em as any, publisher, { backoff: { baseMs: 50, maxMs: 200 }, ...options }, silent);
 
-// lê até a fila esvaziar: depois de ter o esperado, uma leitura vazia confirma que não há duplicata
+// Confirma que não há duplicatas depois das mensagens esperadas.
 async function drainQueue(expected: number) {
   const bodies: any[] = [];
   for (let i = 0; i < 10; i++) {
@@ -99,10 +99,8 @@ describe('OutboxPublisher', () => {
     expect(afterFail.attempts).toBe(1);
     expect(afterFail.published_at).toBeNull();
 
-    // ainda em espera: nada acontece
     expect((await publisher.runOnce()).claimed).toBe(0);
 
-    // o SQS volta e o prazo do backoff chega
     sqsUp = true;
     await db.sql(`update outbox_messages set next_attempt_at = now() - interval '1 second' where id = ?`, [id]);
     expect(await publisher.runOnce()).toEqual({ claimed: 1, published: 1, failed: 0 });
@@ -172,7 +170,7 @@ describe('OutboxPublisher', () => {
     const id = await seed(randomUUID(), 1_000);
     const real = new SqsMessagePublisher(sqs, queueUrl);
 
-    // envia ao SQS mas a transação aborta antes de marcar como publicado
+    // Simula o crash após o envio e antes do commit no banco.
     await expect(
       outbox({
         publish: async (m) => {

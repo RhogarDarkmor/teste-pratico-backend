@@ -23,8 +23,7 @@ export class ProcessWagerMessageUseCase {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
-  // Inbox, saldo, ledger e outbox ficam na mesma transação: ou tudo é confirmado, ou nada.
-  // Quem chama só deve dar ack depois que esta promessa resolver.
+  // Inbox e efeitos financeiros são confirmados juntos; o ack vem depois.
   async execute(body: string): Promise<ProcessMessageOutcome> {
     const startedAt = performance.now();
     const { messageId, command } = parseWagerMessage(body);
