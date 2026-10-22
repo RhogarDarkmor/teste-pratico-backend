@@ -13,6 +13,7 @@ export interface MoneyProps {
 const SCALE = 2;
 const INPUT_AMOUNT = /^\d+(\.\d{1,2})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
+const MAX_DATABASE_AMOUNT = new Decimal('999999999999999999.99');
 
 export class Money {
   private constructor(
@@ -26,7 +27,7 @@ export class Money {
       throw new InvalidMoneyError(`Invalid amount: "${String(amount)}"`);
     }
     Money.assertCurrency(currency);
-    return new Money(new Decimal(amount), currency);
+    return Money.create(new Decimal(amount), currency);
   }
 
   // vindo do banco aceita negativo, a entrada externa (from) não
@@ -41,26 +42,26 @@ export class Money {
     if (!value.isFinite()) {
       throw new InvalidMoneyError(`Invalid persisted amount: "${props.amount}"`);
     }
-    return new Money(value, props.currency);
+    return Money.create(value, props.currency);
   }
 
   static zero(currency: string): Money {
     Money.assertCurrency(currency);
-    return new Money(new Decimal(0), currency);
+    return Money.create(new Decimal(0), currency);
   }
 
   add(other: Money): Money {
     this.assertSameCurrency(other);
-    return new Money(this.value.plus(other.value), this.currency);
+    return Money.create(this.value.plus(other.value), this.currency);
   }
 
   subtract(other: Money): Money {
     this.assertSameCurrency(other);
-    return new Money(this.value.minus(other.value), this.currency);
+    return Money.create(this.value.minus(other.value), this.currency);
   }
 
   negate(): Money {
-    return new Money(this.value.negated(), this.currency);
+    return Money.create(this.value.negated(), this.currency);
   }
 
   isZero(): boolean {
@@ -102,5 +103,12 @@ export class Money {
     if (typeof currency !== 'string' || !CURRENCY.test(currency)) {
       throw new InvalidMoneyError(`Invalid currency: "${String(currency)}"`);
     }
+  }
+
+  private static create(value: Decimal, currency: string): Money {
+    if (value.abs().greaterThan(MAX_DATABASE_AMOUNT)) {
+      throw new InvalidMoneyError('Amount exceeds the database limit for numeric(20,2)');
+    }
+    return new Money(value, currency);
   }
 }

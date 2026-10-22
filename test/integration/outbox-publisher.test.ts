@@ -123,7 +123,7 @@ describe('OutboxPublisher', () => {
       },
     });
 
-    expect(await publisher.runOnce()).toEqual({ claimed: 3, published: 1, failed: 1 });
+    expect(await publisher.runOnce()).toEqual({ claimed: 2, published: 1, failed: 1 });
     expect(sent).toEqual([other]);
     const [row] = await db.sql('select published_at from outbox_messages where id = ?', [second]);
     expect(row.published_at).toBeNull();

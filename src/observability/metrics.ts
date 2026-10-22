@@ -1,3 +1,5 @@
+import { createLogger } from './logger';
+
 type Labels = Record<string, string>;
 
 const keyOf = (labels: Labels) =>
@@ -94,6 +96,8 @@ export class Histogram {
 
 // Gauge calculado na hora da leitura (por exemplo, consultando o banco).
 export class Gauge {
+  private readonly logger = createLogger('Metrics');
+
   constructor(
     readonly name: string,
     readonly help: string,
@@ -104,8 +108,14 @@ export class Gauge {
     const out = [`# HELP ${this.name} ${this.help}`, `# TYPE ${this.name} gauge`];
     try {
       out.push(line(this.name, '', await this.collect()));
-    } catch {
-      // se a consulta falhar o gauge some da leitura; o readiness é quem avisa do banco
+    } catch (error) {
+      this.logger.error('Metric gauge collection failed', {
+        gauge: this.name,
+        errorCode:
+          typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+            ? error.code
+            : undefined,
+      });
     }
     return out;
   }

@@ -156,24 +156,22 @@ export class WageringRepository {
   async reconcileWallet(
     walletId: string,
   ): Promise<{ storedBalance: Money; calculatedBalance: Money; checkedEntries: number } | undefined> {
-    const wallet = await this.findWallet(walletId);
-    if (!wallet) {
-      return undefined;
-    }
     const rows = await this.em.execute(
-      `select coalesce(sum(case direction when 'CREDIT' then amount else -amount end), 0)::text as calculated,
-              count(*)::int as checked_entries
-         from wallet_ledger_entries where wallet_id = ?`,
+      `select w.balance::text as stored_balance, w.currency,
+              coalesce(sum(case l.direction when 'CREDIT' then l.amount else -l.amount end), 0)::text as calculated_balance,
+              count(l.id)::int as checked_entries
+         from wallets w
+         left join wallet_ledger_entries l on l.wallet_id = w.id
+        where w.id = ?
+        group by w.id, w.balance, w.currency`,
       [walletId],
     );
-    const aggregate = rows[0];
-    if (!aggregate) {
-      throw new Error(`Could not reconcile wallet ${walletId}`);
-    }
+    const row = rows[0];
+    if (!row) return undefined;
     return {
-      storedBalance: wallet.balance,
-      calculatedBalance: Money.fromPersisted({ amount: aggregate.calculated, currency: wallet.currency }),
-      checkedEntries: aggregate.checked_entries,
+      storedBalance: Money.fromPersisted({ amount: row.stored_balance, currency: row.currency }),
+      calculatedBalance: Money.fromPersisted({ amount: row.calculated_balance, currency: row.currency }),
+      checkedEntries: row.checked_entries,
     };
   }
 

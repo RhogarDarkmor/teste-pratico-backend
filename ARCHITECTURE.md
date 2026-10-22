@@ -32,11 +32,13 @@ Tudo no banco, com unique no id do provedor, na `idempotency_key` e no ledger. G
 
 Interpretação minha: uma aposta só pode ser revertida uma vez, por refund ou rollback, senão o dinheiro voltava duas vezes. Tem um indice unico parcial garantindo. Se o estorno chega antes da aposta fica `PENDING_REFERENCE` e um worker tenta de novo com backoff (2s a 30s, até 10 min). Comecei com teto de 5 min mas no teste com 5 instâncias tinha estorno travado, baixei pra 30s.
 
+Por que 10 min: fora de ordem normalmente é questão de segundos (fila, retry do provedor). Se em 10 min a aposta não apareceu, é bem provavel que ela não existe, e o provedor precisa de uma resposta final em vez de ficar esperando pra sempre. Aí vira `REJECTED` com `REFERENCE_NOT_FOUND` e sai o evento de rejeição.
+
 ## Mensageria
 
 Na entrada grava no inbox, processa e marca, tudo junto. O ack só sai depois do commit, então se cair a mensagem volta e o inbox segura. Erro permanente vai direto pra DLQ, transitório depois de 5 tentativas.
 
-Na saída o publisher lê o outbox com `SKIP LOCKED` e usa o id do evento como dedup no SQS, porque pode publicar duas vezes.
+Na saída o publisher lê o outbox com `SKIP LOCKED` e usa o id do evento como dedup no SQS, porque pode publicar duas vezes. Um sequence gerado pelo Postgres ordena os eventos; eventos anteriores da mesma carteira bloqueiam os seguintes até serem publicados, inclusive durante retries.
 
 ## Observabilidade
 
@@ -44,14 +46,14 @@ Log em JSON com correlation id, `/metrics` pro Prometheus (outbox lag vem do ban
 
 ## Autenticação
 
-Não fiz, não vale ponto e preferi focar no financeiro. Faria com Keycloak via OIDC e um guard checando se o provedor do token é o mesmo da transação.
+Não fiz, não vale ponto e preferi focar no financeiro. O `ProviderAuthGuard` está ligado ao endpoint de transações como ponto explícito de extensão; hoje ele permite a chamada sem autenticação. Faria com Keycloak via OIDC e um guard checando se o provedor do token é o mesmo da transação.
 
 ## Limitações
 
 - SQL na mão em vez de entidade, pra ter controle dos locks.
 - Metricas em memoria por instância.
 - Conciliação só sob demanda.
-- Com mais de um publisher a ordem dos eventos não é garantida.
+- Eventos de carteiras diferentes não têm uma ordem global garantida.
 - Não fiz teste de carga, só o de 5 instâncias.
 
 ## Como rodar

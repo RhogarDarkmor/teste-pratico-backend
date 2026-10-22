@@ -1,5 +1,5 @@
 import type { EntityManager } from '@mikro-orm/postgresql';
-import { WalletBalanceChanged } from '../domain/events/wagering-events';
+import { WalletBalanceChanged, WagerTransactionProcessed } from '../domain/events/wagering-events';
 import { LedgerDirection, WalletLedgerEntry } from '../domain/ledger/wallet-ledger-entry';
 import { Money } from '../domain/money/money';
 import { WagerTransaction } from '../domain/wagering/wager-transaction';
@@ -85,6 +85,16 @@ export class OpenWalletUseCase {
 
     await repo.insertTransaction(tx, wallet.balance);
     await repo.insertLedgerEntry(entry);
-    await repo.insertOutbox(WalletBalanceChanged.from(wallet, entry, { eventId: newId(), correlationId, occurredAt: now }));
+    await repo.insertOutbox(
+      WagerTransactionProcessed.from(tx, wallet, {
+        eventId: newId(),
+        correlationId,
+        causationId: tx.id,
+        occurredAt: now,
+      }),
+    );
+    await repo.insertOutbox(
+      WalletBalanceChanged.from(wallet, entry, { eventId: newId(), correlationId, causationId: tx.id, occurredAt: now }),
+    );
   }
 }

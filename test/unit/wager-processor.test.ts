@@ -104,6 +104,16 @@ describe('applyWager', () => {
       expect(wallet.balance.toString()).toBe('150.00');
     });
 
+    test('WIN acima do limite do saldo é rejeitado sem alterar a carteira', () => {
+      const wallet = openWallet('999999999999999999.99');
+      const tx = makeTx({ kind: Kind.Win, money: brl('0.01') });
+
+      expect(run(wallet, tx)).toEqual({ status: 'rejected', code: FailureCode.BalanceLimitExceeded });
+      expect(tx.status).toBe(Status.Rejected);
+      expect(wallet.balance.toString()).toBe('999999999999999999.99');
+      expect(wallet.version).toBe(1);
+    });
+
     test('WIN pode referenciar a BET da rodada', () => {
       const wallet = openWallet();
       const bet = processedBet(wallet);

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { QueryWalletsUseCase } from '../../src/application/query-wallets.use-case';
 import { OpenWalletUseCase } from '../../src/application/open-wallet.use-case';
 import {
   type SubmitWagerCommand,
@@ -69,8 +70,10 @@ describe('open wallet', () => {
     const w = await newWallet('50.00');
     expect(await balanceOf(w.walletId)).toBe('50.00');
     expect(await ledgerSum(w.walletId)).toBe('50.00');
-    const outbox = await db.sql('select event_type from outbox_messages where aggregate_id = ?', [w.walletId]);
-    expect(outbox.map((r) => r.event_type)).toEqual(['WalletBalanceChanged']);
+    const outbox = await db.sql('select event_type from outbox_messages where aggregate_id = ? order by event_type', [
+      w.walletId,
+    ]);
+    expect(outbox.map((r) => r.event_type)).toEqual(['WagerTransactionProcessed', 'WalletBalanceChanged']);
   });
 
   test('saldo zero não gera ledger', async () => {
@@ -131,6 +134,26 @@ describe('submit wager', () => {
     expect(r.status).toBe(S.Rejected);
     expect(r.failureCode).toBe(FailureCode.InsufficientFunds);
     expect(await balanceOf(w.walletId)).toBe('5.00');
+  });
+
+  test('crédito acima do limite do banco é rejeitado e auditado', async () => {
+    const w = await newWallet('999999999999999999.99');
+    const result = await submit.execute(cmd(w, { kind: WagerTransactionKind.Win, amount: '0.01' }));
+
+    expect(result.status).toBe(S.Rejected);
+    expect(result.failureCode).toBe(FailureCode.BalanceLimitExceeded);
+    expect(await balanceOf(w.walletId)).toBe('999999999999999999.99');
+    const rows = await db.sql(
+      `select t.status, t.failure_code, count(l.id)::int as ledger_entries
+         from wager_transactions t
+         left join wallet_ledger_entries l on l.transaction_id = t.id
+        where t.id = ?
+        group by t.id`,
+      [result.transactionId],
+    );
+    expect(rows[0]).toMatchObject({ status: 'REJECTED', failure_code: 'BALANCE_LIMIT_EXCEEDED', ledger_entries: 0 });
+    const events = await db.sql('select event_type from outbox_messages where aggregate_id = ?', [w.walletId]);
+    expect(events.map((row) => row.event_type)).toContain('WagerTransactionRejected');
   });
 
   test('REFUND antes da BET fica aguardando referência', async () => {
@@ -194,5 +217,20 @@ describe('concorrência', () => {
     for (const w of wallets) {
       expect(await balanceOf(w.walletId)).toBe('75.00');
     }
+  });
+
+  test('conciliação permanece consistente durante movimentações concorrentes', async () => {
+    const w = await newWallet('100.00');
+    const queries = new QueryWalletsUseCase(db.orm.em as any);
+    const movements = Array.from({ length: 40 }, () =>
+      submit.execute(cmd(w, { amount: '1.00' })),
+    );
+    const reconciliations = Array.from({ length: 80 }, () => queries.reconcile(w.walletId));
+
+    const results = await Promise.all([...movements, ...reconciliations]);
+    const checked = results.slice(movements.length);
+    expect(checked.every((result) => 'consistent' in result && result.consistent)).toBe(true);
+    expect(await balanceOf(w.walletId)).toBe('60.00');
+    expect(await ledgerSum(w.walletId)).toBe('60.00');
   });
 });

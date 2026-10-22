@@ -1,6 +1,7 @@
 export enum FailureCode {
   InsufficientFunds = 'INSUFFICIENT_FUNDS',
   ReversalWouldOverdraw = 'REVERSAL_WOULD_OVERDRAW',
+  BalanceLimitExceeded = 'BALANCE_LIMIT_EXCEEDED',
   CurrencyMismatch = 'CURRENCY_MISMATCH',
   PlayerMismatch = 'PLAYER_MISMATCH',
   ReferenceNotFound = 'REFERENCE_NOT_FOUND',

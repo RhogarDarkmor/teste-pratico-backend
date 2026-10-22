@@ -1,4 +1,5 @@
 import { InsufficientFundsError } from '../errors/wallet.errors';
+import { InvalidMoneyError } from '../errors/money.errors';
 import { InvalidTransactionStateError } from '../errors/wager.errors';
 import { LedgerDirection, WalletLedgerEntry } from '../ledger/wallet-ledger-entry';
 import { Wallet } from '../wallet/wallet';
@@ -75,6 +76,9 @@ export function applyWager(tx: WagerTransaction, ctx: ApplyWagerContext): WagerO
     if (error instanceof InsufficientFundsError) {
       const code = tx.kind === K.Bet ? FailureCode.InsufficientFunds : FailureCode.ReversalWouldOverdraw;
       return reject(tx, code);
+    }
+    if (error instanceof InvalidMoneyError) {
+      return reject(tx, FailureCode.BalanceLimitExceeded);
     }
     throw error;
   }

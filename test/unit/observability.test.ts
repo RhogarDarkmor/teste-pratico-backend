@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { withRetry } from '../../src/infra/database/retry';
 import { createLogger, JsonLogger, setLogSink } from '../../src/observability/logger';
-import { Counter, Histogram, metrics } from '../../src/observability/metrics';
+import { Counter, Gauge, Histogram, metrics } from '../../src/observability/metrics';
 
 let lines: Record<string, any>[] = [];
 
@@ -55,6 +55,25 @@ describe('métricas', () => {
     expect(out).toContain('lat_seconds_bucket{le="1"} 2');
     expect(out).toContain('lat_seconds_bucket{le="+Inf"} 2');
     expect(out).toContain('lat_seconds_count 2');
+  });
+
+  test('falha ao coletar gauge é registrada em log sem quebrar o scrape', async () => {
+    const gauge = new Gauge('db_gauge', 'database gauge', async () => {
+      throw Object.assign(new Error('unavailable'), { code: 'ECONNREFUSED' });
+    });
+
+    expect(await gauge.render()).toEqual([
+      '# HELP db_gauge database gauge',
+      '# TYPE db_gauge gauge',
+    ]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      level: 'error',
+      context: 'Metrics',
+      message: 'Metric gauge collection failed',
+      gauge: 'db_gauge',
+      errorCode: 'ECONNREFUSED',
+    });
   });
 
   test('retry de deadlock e serialização conta como conflito de lock; unique só como retry', async () => {

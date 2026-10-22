@@ -9,6 +9,7 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { OpenWalletUseCase } from '../application/open-wallet.use-case';
@@ -17,6 +18,7 @@ import { SubmitWagerTransactionUseCase, type SubmitWagerCommand } from '../appli
 import { WagerTransactionKind } from '../domain/wagering/wager-transaction';
 import { createLogger } from '../observability/logger';
 import { metrics } from '../observability/metrics';
+import { ProviderAuthGuard } from './provider-auth.guard';
 
 const reconciliationLogger = createLogger('Reconciliation');
 
@@ -97,6 +99,7 @@ export class WageringController {
   }
 
   @Post('wagering/transactions')
+  @UseGuards(ProviderAuthGuard)
   async submit(
     @Body() body: unknown,
     @Headers('idempotency-key') idempotencyKey?: string,

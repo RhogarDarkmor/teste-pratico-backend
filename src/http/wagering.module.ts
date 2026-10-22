@@ -4,10 +4,12 @@ import { OpenWalletUseCase } from '../application/open-wallet.use-case';
 import { QueryWalletsUseCase } from '../application/query-wallets.use-case';
 import { SubmitWagerTransactionUseCase } from '../application/submit-wager-transaction.use-case';
 import { WageringController } from './wagering.controller';
+import { ProviderAuthGuard } from './provider-auth.guard';
 
 @Module({
   controllers: [WageringController],
   providers: [
+    ProviderAuthGuard,
     {
       provide: OpenWalletUseCase,
       inject: [EntityManager],

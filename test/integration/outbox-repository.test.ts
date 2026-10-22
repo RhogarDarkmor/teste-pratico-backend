@@ -40,8 +40,8 @@ const claim = (limit: number) =>
 
 describe('OutboxRepository.claimPending', () => {
   test('devolve as pendentes da mais antiga para a mais nova', async () => {
-    const newer = await seed({ occurredAt: new Date(Date.now() - 10_000).toISOString() });
     const older = await seed({ occurredAt: new Date(Date.now() - 50_000).toISOString() });
+    const newer = await seed({ occurredAt: new Date(Date.now() - 10_000).toISOString() });
 
     const messages = await claim(10);
 
@@ -127,5 +127,39 @@ describe('OutboxRepository.claimPending', () => {
     const other = await seed();
 
     expect((await claim(10)).map((m) => m.id)).toEqual([other]);
+  });
+
+  test('não libera mensagem nova enquanto a anterior vencida está bloqueada por outro publicador', async () => {
+    const aggregateId = randomUUID();
+    const older = await seed({
+      aggregateId,
+      occurredAt: new Date(Date.now() - 50_000).toISOString(),
+      nextAttemptAt: new Date(Date.now() - 1_000).toISOString(),
+    });
+    const newer = await seed({ aggregateId, occurredAt: new Date(Date.now() - 40_000).toISOString() });
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let firstClaimed!: () => void;
+    const firstReady = new Promise<void>((resolve) => (firstClaimed = resolve));
+
+    const first = db.orm.em.fork().transactional(async (tem) => {
+      const messages = await new OutboxRepository(tem as any).claimPending(1);
+      firstClaimed();
+      await gate;
+      return messages;
+    });
+    await firstReady;
+
+    const second = await claim(10);
+    release();
+    const firstMessages = await first;
+
+    expect(firstMessages.map((message) => message.id)).toEqual([older]);
+    expect(second).toHaveLength(0);
+    expect(second.map((message) => message.id)).not.toContain(newer);
+    expect((await claim(10)).map((message) => message.id)).toEqual([older]);
+    await db.orm.em.fork().transactional((tem) => new OutboxRepository(tem as any).markPublished(older));
+    expect((await claim(10)).map((message) => message.id)).toEqual([newer]);
   });
 });

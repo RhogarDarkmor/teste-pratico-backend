@@ -95,7 +95,13 @@ export class SubmitWagerTransactionUseCase {
   }
 
   private async run(repo: WageringRepository, command: SubmitWagerCommand): Promise<SubmitWagerResult> {
-    // o domínio muta a transação, então ela é remontada a cada tentativa
+    const money = Money.from({ amount: command.amount, currency: command.currency });
+    const wallet = await repo.lockWallet(command.walletId);
+    if (!wallet) {
+      throw new WalletNotFoundError(`Wallet ${command.walletId} not found`);
+    }
+
+    // O timestamp é criado depois do lock para refletir a ordem de processamento da carteira.
     const now = this.clock();
     const tx = WagerTransaction.create({
       id: newId(),
@@ -107,15 +113,10 @@ export class SubmitWagerTransactionUseCase {
       roundId: command.roundId,
       gameId: command.gameId,
       kind: command.kind,
-      money: Money.from({ amount: command.amount, currency: command.currency }),
+      money,
       referenceExternalTransactionId: command.referenceExternalTransactionId,
       now,
     });
-
-    const wallet = await repo.lockWallet(tx.walletId);
-    if (!wallet) {
-      throw new WalletNotFoundError(`Wallet ${tx.walletId} not found`);
-    }
 
     const existing = await repo.findByIdempotency(tx.idempotencyKey, tx.providerId, tx.externalTransactionId);
     if (existing.length > 0) {

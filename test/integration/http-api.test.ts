@@ -119,6 +119,14 @@ describe('HTTP API', () => {
     expect(response.status).toBe(400);
   });
 
+  test('recusa saldo inicial acima do limite numeric(20,2) com 400', async () => {
+    const response = await post('/wallets', {
+      playerId: `too-large-player-${++seq}`,
+      initialBalance: { amount: '1000000000000000000.00', currency: 'BRL' },
+    });
+    expect(response.status).toBe(400);
+  });
+
   test('mapeia duplicidade e parâmetros de consulta inválidos', async () => {
     const playerId = `duplicate-player-${++seq}`;
     const body = { playerId, initialBalance: { amount: '0.00', currency: 'BRL' } };

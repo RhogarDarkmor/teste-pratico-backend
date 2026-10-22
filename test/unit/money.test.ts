@@ -54,9 +54,11 @@ describe('Money', () => {
       expect(brl('5.00').negate().negate().equals(brl('5.00'))).toBe(true);
     });
 
-    test('suporta valores grandes sem perder precisão', () => {
+    test('respeita o limite numeric(20,2) do banco', () => {
       const big = brl('999999999999999999.99');
-      expect(big.add(brl('0.01')).toString()).toBe('1000000000000000000.00');
+      expect(big.toString()).toBe('999999999999999999.99');
+      expect(() => brl('1000000000000000000.00')).toThrow(InvalidMoneyError);
+      expect(() => big.add(brl('0.01'))).toThrow(InvalidMoneyError);
     });
   });
 

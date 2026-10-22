@@ -9,7 +9,7 @@ export class OutboxRepository {
   // Precisa rodar dentro de uma transação: o lock dura até o commit.
   // SKIP LOCKED faz cada publicador pegar um lote diferente, sem esperar um pelo outro.
   async claimPending(limit: number): Promise<OutboxMessage[]> {
-    // a mensagem não é pega se uma anterior da mesma carteira está esperando backoff: ela vai primeiro
+    // Uma mensagem anterior bloqueia a carteira até ser publicada, inclusive enquanto está em retry.
     const rows = await this.em.execute(
       `select id, aggregate_id, event_type, payload, ${ts('occurred_at')} as occurred_at, attempts,
               ${ts('next_attempt_at')} as next_attempt_at, ${ts('published_at')} as published_at
@@ -20,10 +20,9 @@ export class OutboxRepository {
             select 1 from outbox_messages o
              where o.aggregate_id = m.aggregate_id
                and o.published_at is null
-               and (o.occurred_at, o.id) < (m.occurred_at, m.id)
-               and coalesce(o.next_attempt_at, o.occurred_at) > now()
+               and o.sequence_id < m.sequence_id
           )
-        order by coalesce(next_attempt_at, occurred_at), occurred_at, id
+        order by coalesce(next_attempt_at, occurred_at), sequence_id
         limit ?
         for update of m skip locked`,
       [limit],
