@@ -19,7 +19,7 @@ export class PendingReferenceWorkerService implements OnApplicationBootstrap, On
     const useCase = new ReprocessPendingReferencesUseCase(this.em, {
       batchSize: Number(process.env.PENDING_REFERENCE_BATCH_SIZE ?? 20),
       ttlMs: Number(process.env.PENDING_REFERENCE_TTL_MS ?? 10 * 60_000),
-      maxAttempts: Number(process.env.PENDING_REFERENCE_MAX_ATTEMPTS ?? 12),
+      maxAttempts: Number(process.env.PENDING_REFERENCE_MAX_ATTEMPTS ?? 40),
     });
     this.worker = new PendingReferenceWorker(
       useCase,

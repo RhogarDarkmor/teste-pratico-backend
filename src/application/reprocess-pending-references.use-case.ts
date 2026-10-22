@@ -25,8 +25,10 @@ export interface ReprocessOptions {
 export const DEFAULT_REPROCESS_OPTIONS: ReprocessOptions = {
   batchSize: 20,
   ttlMs: 10 * 60_000,
-  maxAttempts: 12,
-  backoff: { baseMs: 2_000, maxMs: 5 * 60_000 },
+  // o TTL é o limite de verdade; as tentativas só protegem contra laço infinito
+  maxAttempts: 40,
+  // teto baixo: quando a referência chega, a transação espera no máximo ~30s para ser liquidada
+  backoff: { baseMs: 2_000, maxMs: 30_000 },
 };
 
 export type ReprocessResult = 'processed' | 'rejected' | 'waiting' | 'expired' | 'skipped';
